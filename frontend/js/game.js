@@ -1,6 +1,7 @@
 // ============================================================
-// THE SHIMMERING WASTES — Mock Game Engine
-// State management, game logic, and choice processing
+// THE SHIMMERING WASTES — Mock Game Engine v2.0
+// State management, game logic, time-of-day theming,
+// particle effects, and save system
 // ============================================================
 
 const GameEngine = (() => {
@@ -39,6 +40,8 @@ const GameEngine = (() => {
     // ---- Initialize ----
     function init() {
         state.gameStarted = true;
+        applyTimeTheme();
+        ParticleEngine.init();
         UI.updateHUD(state);
         UI.updateLocation(REGIONS[state.currentRegion]);
         UI.addNarrative(INTRO_NARRATIVE, "gm");
@@ -134,7 +137,7 @@ const GameEngine = (() => {
         if (updates.full_heal) {
             state.hp = state.maxHp;
             state.mp = state.maxMp;
-            UI.showToast("Fully restored!", "success", "fa-heart-pulse");
+            UI.showToast("Fully healed!", "success", "fa-heart-pulse");
         }
 
         if (updates.addItem) {
@@ -161,9 +164,7 @@ const GameEngine = (() => {
         // Enemy HP updates from combat narrative
         if (state.combatActive && state.currentEnemy) {
             const enemy = ENEMIES[state.currentEnemy];
-            // Simple mock: reduce enemy HP based on combat actions
             if (updates.hp_change !== undefined && updates.combat_active) {
-                // If player attacked, reduce enemy HP proportionally
                 const playerDamage = Math.floor(state.str * 1.5 + Math.random() * 5);
                 state.currentEnemyHp = Math.max(0, state.currentEnemyHp - playerDamage);
                 UI.updateEnemyHp(state.currentEnemyHp, enemy.maxHp);
@@ -198,7 +199,7 @@ const GameEngine = (() => {
         UI.updateHUD(state);
     }
 
-    // ---- Time Management ----
+    // ---- Time Management + Dynamic Theme ----
     function advanceTime() {
         state.timePhase++;
         if (state.timePhase > 3) {
@@ -209,6 +210,20 @@ const GameEngine = (() => {
             state.mp = Math.min(state.maxMp, state.mp + 3);
             UI.showToast(`Day ${state.day} — Rest bonus: +5 HP, +3 MP`, "success", "fa-sun");
         }
+        applyTimeTheme();
+    }
+
+    function applyTimeTheme() {
+        const body = document.body;
+        // Remove all time classes
+        body.classList.remove("time-morning", "time-afternoon", "time-evening", "time-night");
+
+        // Apply current time class
+        const timeClasses = ["time-morning", "time-afternoon", "time-evening", "time-night"];
+        body.classList.add(timeClasses[state.timePhase]);
+
+        // Update particle colors based on time
+        ParticleEngine.setTimePhase(state.timePhase);
     }
 
     // ---- Level Up ----
@@ -248,11 +263,12 @@ const GameEngine = (() => {
         state.currentRegion = "last_bastion";
         UI.hideEnemyPanel();
         UI.updateLocation(REGIONS.last_bastion);
+        applyTimeTheme();
 
         setTimeout(() => {
-            UI.addNarrative(`<strong class="text-danger">You collapse to the ground. Darkness takes you...</strong>
+            UI.addNarrative(`<strong class="text-danger">You fall to the ground. Everything goes dark...</strong>
 
-You awaken in the Last Bastion. Elara stands over you, her healing tattoos fading. <em>"You're lucky someone dragged you back inside the walls. You lost some coins... and some dignity. Rest up."</em>
+You wake up back in the Last Bastion. Elara stands over you, her healing marks slowly fading. <em>"You're lucky someone carried you back inside. You lost some coins... and some pride. Get some rest."</em>
 
 It is now <strong>Morning of Day ${state.day}</strong>.`, "gm");
             UI.showChoices([
@@ -306,13 +322,11 @@ It is now <strong>Morning of Day ${state.day}</strong>.`, "gm");
         state[statName]++;
         state.statPoints--;
 
-        // INT affects max MP
         if (statName === "int") {
             state.maxMp += 2;
             state.mp = Math.min(state.maxMp, state.mp + 2);
         }
 
-        // STR affects max HP slightly
         if (statName === "str") {
             state.maxHp += 1;
         }
@@ -335,7 +349,6 @@ It is now <strong>Morning of Day ${state.day}</strong>.`, "gm");
             UI.hideTypingIndicator();
 
             const lower = text.toLowerCase();
-            // Simple keyword matching for demo
             if (lower.includes("attack") || lower.includes("fight") || lower.includes("hit")) {
                 if (state.combatActive) {
                     processChoice("combat_attack");
@@ -344,7 +357,7 @@ It is now <strong>Morning of Day ${state.day}</strong>.`, "gm");
             }
             if (lower.includes("heal") || lower.includes("potion")) {
                 if (useItem("healing_potion")) {
-                    UI.addNarrative("You uncork the Healing Potion and drink deeply. Warmth floods through your body as your wounds begin to close. <strong>+20 HP</strong>", "gm");
+                    UI.addNarrative("You open the Healing Potion and drink it down. Warmth flows through your body as your wounds start to close. <strong>+20 HP</strong>", "gm");
                     return;
                 }
             }
@@ -356,9 +369,86 @@ It is now <strong>Morning of Day ${state.day}</strong>.`, "gm");
                 processChoice("leave_bastion");
                 return;
             }
+            if (lower.includes("save")) {
+                UI.openSaveModal();
+                return;
+            }
 
-            UI.addNarrative(`<em>You mutter "${text}" to yourself. The Wastes echo your words back, but nothing changes. Perhaps a more specific action would serve you better.</em>`, "gm");
+            UI.addNarrative(`<em>You say "${text}" out loud. The Wastes echo your words back, but nothing happens. Maybe try something more specific.</em>`, "gm");
         }, 800);
+    }
+
+    // ---- Save / Load System (localStorage for now) ----
+    function saveGame(slotId) {
+        const saveData = {
+            state: { ...state },
+            timestamp: new Date().toISOString(),
+            slotId: slotId
+        };
+        try {
+            localStorage.setItem(`tsw_save_${slotId}`, JSON.stringify(saveData));
+            UI.showToast(`Game saved to Slot ${slotId}!`, "success", "fa-floppy-disk");
+            UI.updateSaveModal();
+            return true;
+        } catch (e) {
+            UI.showToast("Save failed!", "danger", "fa-triangle-exclamation");
+            return false;
+        }
+    }
+
+    function loadGame(slotId) {
+        try {
+            const raw = localStorage.getItem(`tsw_save_${slotId}`);
+            if (!raw) return false;
+
+            const saveData = JSON.parse(raw);
+            Object.assign(state, saveData.state);
+            applyTimeTheme();
+            UI.updateHUD(state);
+            UI.updateLocation(REGIONS[state.currentRegion]);
+            UI.showToast(`Loaded from Slot ${slotId}!`, "success", "fa-upload");
+            UI.addNarrative(`<em><strong>— Game Loaded —</strong> Welcome back, Scrapper. It is ${TIME_PHASES[state.timePhase]} of Day ${state.day}.</em>`, "gm");
+            UI.showChoices([
+                { id: "explore_bastion", text: "Look around", icon: "fa-magnifying-glass" },
+                { id: "leave_bastion", text: "Head to the Ash Plains", icon: "fa-person-walking" }
+            ]);
+            return true;
+        } catch (e) {
+            UI.showToast("Load failed!", "danger", "fa-triangle-exclamation");
+            return false;
+        }
+    }
+
+    function deleteSave(slotId) {
+        localStorage.removeItem(`tsw_save_${slotId}`);
+        UI.showToast(`Slot ${slotId} deleted`, "warning", "fa-trash");
+        UI.updateSaveModal();
+    }
+
+    function getSaveSlots() {
+        const slots = [];
+        for (let i = 1; i <= 5; i++) {
+            const raw = localStorage.getItem(`tsw_save_${i}`);
+            if (raw) {
+                try {
+                    const data = JSON.parse(raw);
+                    slots.push({
+                        id: i,
+                        filled: true,
+                        level: data.state.level,
+                        day: data.state.day,
+                        coins: data.state.coins,
+                        timePhase: data.state.timePhase,
+                        timestamp: data.timestamp
+                    });
+                } catch (e) {
+                    slots.push({ id: i, filled: false });
+                }
+            } else {
+                slots.push({ id: i, filled: false });
+            }
+        }
+        return slots;
     }
 
     // ---- Public API ----
@@ -368,7 +458,115 @@ It is now <strong>Morning of Day ${state.day}</strong>.`, "gm");
         processCustomInput,
         allocateStat,
         useItem,
+        saveGame,
+        loadGame,
+        deleteSave,
+        getSaveSlots,
         getState: () => ({ ...state }),
         getInventory: () => [...state.inventory]
     };
+})();
+
+// ============================================================
+// PARTICLE ENGINE — Floating ambient particles
+// ============================================================
+const ParticleEngine = (() => {
+    let canvas, ctx;
+    let particles = [];
+    let animFrame;
+    let timePhase = 0;
+
+    // Particle colors per time of day
+    const PARTICLE_PALETTES = {
+        0: ["#ffd700", "#ffaa00", "#ffffff", "#ffe4a0"],       // Morning: golden
+        1: ["#ffffff", "#c8deff", "#ffe4b5", "#87ceeb"],       // Afternoon: bright white-blue
+        2: ["#ff6b35", "#ff3d00", "#ffa040", "#cc5500"],       // Evening: sunset orange
+        3: ["#4060ff", "#6080ff", "#8090c0", "#2040a0"]        // Night: cool blue
+    };
+
+    function init() {
+        canvas = document.getElementById("particle-canvas");
+        if (!canvas) return;
+        ctx = canvas.getContext("2d");
+        resize();
+        window.addEventListener("resize", resize);
+        createParticles(60);
+        animate();
+    }
+
+    function resize() {
+        canvas.width = window.innerWidth;
+        canvas.height = window.innerHeight;
+    }
+
+    function createParticles(count) {
+        particles = [];
+        for (let i = 0; i < count; i++) {
+            particles.push(makeParticle());
+        }
+    }
+
+    function makeParticle() {
+        const palette = PARTICLE_PALETTES[timePhase] || PARTICLE_PALETTES[0];
+        return {
+            x: Math.random() * (canvas ? canvas.width : window.innerWidth),
+            y: Math.random() * (canvas ? canvas.height : window.innerHeight),
+            size: Math.random() * 3 + 1,
+            speedX: (Math.random() - 0.5) * 0.4,
+            speedY: -Math.random() * 0.3 - 0.1,
+            opacity: Math.random() * 0.5 + 0.1,
+            color: palette[Math.floor(Math.random() * palette.length)],
+            pulse: Math.random() * Math.PI * 2,
+            pulseSpeed: Math.random() * 0.02 + 0.005
+        };
+    }
+
+    function setTimePhase(phase) {
+        timePhase = phase;
+        // Gradually recolor particles
+        const palette = PARTICLE_PALETTES[phase] || PARTICLE_PALETTES[0];
+        particles.forEach(p => {
+            p.color = palette[Math.floor(Math.random() * palette.length)];
+        });
+    }
+
+    function animate() {
+        if (!ctx || !canvas) return;
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+        particles.forEach(p => {
+            p.x += p.speedX;
+            p.y += p.speedY;
+            p.pulse += p.pulseSpeed;
+
+            const currentOpacity = p.opacity * (0.5 + 0.5 * Math.sin(p.pulse));
+
+            // Wrap around
+            if (p.y < -10) { p.y = canvas.height + 10; p.x = Math.random() * canvas.width; }
+            if (p.x < -10) p.x = canvas.width + 10;
+            if (p.x > canvas.width + 10) p.x = -10;
+
+            ctx.beginPath();
+            ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
+            ctx.fillStyle = p.color;
+            ctx.globalAlpha = currentOpacity;
+            ctx.fill();
+
+            // Glow effect
+            ctx.beginPath();
+            ctx.arc(p.x, p.y, p.size * 3, 0, Math.PI * 2);
+            ctx.fillStyle = p.color;
+            ctx.globalAlpha = currentOpacity * 0.15;
+            ctx.fill();
+        });
+
+        ctx.globalAlpha = 1;
+        animFrame = requestAnimationFrame(animate);
+    }
+
+    function destroy() {
+        if (animFrame) cancelAnimationFrame(animFrame);
+    }
+
+    return { init, setTimePhase, destroy };
 })();

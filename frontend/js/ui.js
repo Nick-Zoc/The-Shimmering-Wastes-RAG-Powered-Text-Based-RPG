@@ -1,6 +1,6 @@
 // ============================================================
-// THE SHIMMERING WASTES — UI Controller
-// DOM manipulation, animations, and rendering
+// THE SHIMMERING WASTES — UI Controller v2.0
+// DOM manipulation, animations, save modal, particle hookups
 // ============================================================
 
 const UI = (() => {
@@ -50,6 +50,7 @@ const UI = (() => {
         // Modals
         dom.statsModal = document.getElementById("statsModal");
         dom.inventoryModal = document.getElementById("inventoryModal");
+        dom.saveModal = document.getElementById("saveModal");
     }
 
     // ---- Update HUD ----
@@ -93,8 +94,8 @@ const UI = (() => {
     function updateLocation(region) {
         dom.locationIcon.innerHTML = `<i class="fa-solid ${region.icon}"></i>`;
         dom.locationIcon.style.color = region.color;
-        dom.locationIcon.style.background = hexToRgba(region.color, 0.1);
-        dom.locationIcon.style.borderColor = hexToRgba(region.color, 0.3);
+        dom.locationIcon.style.background = hexToRgba(region.color, 0.12);
+        dom.locationIcon.style.borderColor = hexToRgba(region.color, 0.35);
         dom.locationName.textContent = region.name;
         dom.locationLevel.textContent = region.levelRange;
     }
@@ -158,7 +159,7 @@ const UI = (() => {
         const buttons = dom.choicesContainer.querySelectorAll(".choice-btn");
         buttons.forEach(btn => {
             btn.disabled = true;
-            btn.style.opacity = "0.4";
+            btn.style.opacity = "0.35";
             btn.style.pointerEvents = "none";
         });
     }
@@ -194,7 +195,7 @@ const UI = (() => {
         setTimeout(() => {
             hpGroup.classList.remove("damage-flash");
             dom.gameContainer.classList.remove("damage-flash-screen");
-        }, 500);
+        }, 600);
     }
 
     // ---- Enemy Panel ----
@@ -264,7 +265,6 @@ const UI = (() => {
         document.getElementById("modal-int").textContent = state.int;
         document.getElementById("modal-agi").textContent = state.agi;
 
-        // Enable/disable upgrade buttons
         const btns = document.querySelectorAll(".stat-upgrade-btn");
         btns.forEach(btn => {
             btn.disabled = state.statPoints <= 0;
@@ -329,6 +329,92 @@ const UI = (() => {
         }
     }
 
+    // ---- Save / Load Modal ----
+    function openSaveModal() {
+        updateSaveModal();
+        const modal = new bootstrap.Modal(dom.saveModal);
+        modal.show();
+    }
+
+    function updateSaveModal() {
+        const container = document.getElementById("save-slots-container");
+        if (!container) return;
+
+        const slots = GameEngine.getSaveSlots();
+        container.innerHTML = "";
+
+        slots.forEach(slot => {
+            const div = document.createElement("div");
+            div.className = `save-slot ${slot.filled ? "" : "save-slot-empty"}`;
+
+            if (slot.filled) {
+                const timeLabel = TIME_PHASES[slot.timePhase] || "Unknown";
+                const dateStr = new Date(slot.timestamp).toLocaleDateString() + " " + new Date(slot.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+
+                div.innerHTML = `
+                    <div class="save-slot-left">
+                        <div class="save-slot-number">${slot.id}</div>
+                        <div class="save-slot-info">
+                            <div class="save-slot-title">The Scrapper — Lv.${slot.level}</div>
+                            <div class="save-slot-details">Day ${slot.day} • ${timeLabel} • ${slot.coins} coins • Saved: ${dateStr}</div>
+                        </div>
+                    </div>
+                    <div class="save-slot-actions">
+                        <button class="save-action-btn" title="Load Game" data-load="${slot.id}">
+                            <i class="fa-solid fa-upload"></i>
+                        </button>
+                        <button class="save-action-btn" title="Overwrite Save" data-save="${slot.id}">
+                            <i class="fa-solid fa-floppy-disk"></i>
+                        </button>
+                        <button class="save-action-btn delete" title="Delete Save" data-delete="${slot.id}">
+                            <i class="fa-solid fa-trash"></i>
+                        </button>
+                    </div>
+                `;
+            } else {
+                div.innerHTML = `
+                    <div class="save-slot-left">
+                        <div class="save-slot-number">${slot.id}</div>
+                        <div class="save-slot-info">
+                            <div class="save-slot-title">— Empty Slot —</div>
+                            <div class="save-slot-details">No saved game</div>
+                        </div>
+                    </div>
+                    <div class="save-slot-actions">
+                        <button class="save-action-btn" title="Save Here" data-save="${slot.id}">
+                            <i class="fa-solid fa-floppy-disk"></i>
+                        </button>
+                    </div>
+                `;
+            }
+
+            container.appendChild(div);
+        });
+
+        // Attach event listeners
+        container.querySelectorAll("[data-save]").forEach(btn => {
+            btn.addEventListener("click", (e) => {
+                e.stopPropagation();
+                GameEngine.saveGame(parseInt(btn.dataset.save));
+            });
+        });
+
+        container.querySelectorAll("[data-load]").forEach(btn => {
+            btn.addEventListener("click", (e) => {
+                e.stopPropagation();
+                GameEngine.loadGame(parseInt(btn.dataset.load));
+                bootstrap.Modal.getInstance(dom.saveModal).hide();
+            });
+        });
+
+        container.querySelectorAll("[data-delete]").forEach(btn => {
+            btn.addEventListener("click", (e) => {
+                e.stopPropagation();
+                GameEngine.deleteSave(parseInt(btn.dataset.delete));
+            });
+        });
+    }
+
     // ---- Utility ----
     function hexToRgba(hex, alpha) {
         const r = parseInt(hex.slice(1, 3), 16);
@@ -371,6 +457,7 @@ const UI = (() => {
         // HUD buttons
         document.getElementById("btn-stats").addEventListener("click", openStatsModal);
         document.getElementById("btn-inventory").addEventListener("click", openInventoryModal);
+        document.getElementById("btn-save").addEventListener("click", openSaveModal);
         document.getElementById("btn-map").addEventListener("click", () => {
             showToast("Map coming in Phase 2!", "warning", "fa-map");
         });
@@ -399,7 +486,9 @@ const UI = (() => {
         openStatsModal,
         updateStatsModal,
         openInventoryModal,
-        updateInventoryModal
+        updateInventoryModal,
+        openSaveModal,
+        updateSaveModal
     };
 })();
 

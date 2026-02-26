@@ -1,26 +1,34 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta name="description" content="The Shimmering Wastes — A RAG-Powered Text-Based RPG set in a post-magical-cataclysm wasteland.">
-    <title>The Shimmering Wastes — Idle RPG</title>
+    <meta name="description"
+        content="The Shimmering Wastes — An idle RPG text-based adventure game set in a post-magical-apocalypse world.">
+    <title>The Shimmering Wastes — RPG</title>
 
-    <!-- Bootstrap 5 -->
+    <!-- Bootstrap 5 CSS -->
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
     <!-- Font Awesome 6 -->
-    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
     <!-- Game Styles -->
     <link rel="stylesheet" href="css/style.css">
-    <!-- Favicon -->
-    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>⚔️</text></svg>">
 </head>
-<body>
+
+<body class="time-morning">
+
+    <!-- ========== PARTICLE CANVAS ========== -->
+    <canvas id="particle-canvas"></canvas>
+
     <!-- ========== GAME CONTAINER ========== -->
     <div class="game-container" id="game-container">
 
-        <!-- ========== HUD SIDEBAR ========== -->
+        <!-- ==========================================
+             HUD SIDEBAR (Left Panel)
+             ========================================== -->
         <aside class="hud-sidebar">
+
             <!-- Player Header -->
             <div class="player-header">
                 <div class="player-avatar">
@@ -30,7 +38,7 @@
                 <div class="player-title">Wastes Survivor</div>
             </div>
 
-            <!-- Vitals -->
+            <!-- Vitals Section (HP / MP / EXP) -->
             <div class="hud-section">
                 <div class="hud-section-title">Vitals</div>
 
@@ -65,18 +73,19 @@
                     <div class="resource-bar">
                         <div class="resource-bar-fill" id="exp-fill" style="width: 0%"></div>
                     </div>
-                    <div style="text-align: right; margin-top: 4px;">
-                        <span class="level-badge" id="level-badge">Lv. 1</span>
-                    </div>
+                </div>
+
+                <div class="text-center mt-2">
+                    <span class="level-badge" id="level-badge">Lv. 1</span>
                 </div>
             </div>
 
-            <!-- Core Stats -->
+            <!-- Attributes Section -->
             <div class="hud-section">
                 <div class="hud-section-title">Attributes</div>
                 <div class="stats-grid">
                     <div class="stat-item">
-                        <div class="stat-icon str"><i class="fa-solid fa-hand-fist"></i></div>
+                        <div class="stat-icon str"><i class="fa-solid fa-fist-raised"></i></div>
                         <div class="stat-info">
                             <span class="stat-name">STR</span>
                             <span class="stat-value" id="stat-str">5</span>
@@ -97,7 +106,7 @@
                         </div>
                     </div>
                     <div class="stat-item">
-                        <div class="stat-icon agi"><i class="fa-solid fa-feather"></i></div>
+                        <div class="stat-icon agi"><i class="fa-solid fa-bolt"></i></div>
                         <div class="stat-info">
                             <span class="stat-name">AGI</span>
                             <span class="stat-value" id="stat-agi">4</span>
@@ -106,7 +115,7 @@
                 </div>
             </div>
 
-            <!-- Economy & Time -->
+            <!-- Status Section (Coins, Day) -->
             <div class="hud-section">
                 <div class="hud-section-title">Status</div>
                 <div class="info-row">
@@ -117,7 +126,7 @@
                 </div>
                 <div class="info-row">
                     <div class="info-row-label">
-                        <i class="fa-solid fa-calendar-day" style="color: var(--teal)"></i> Day
+                        <i class="fa-solid fa-calendar-days" style="color: var(--teal)"></i> Day
                     </div>
                     <div class="info-row-value" id="day-counter" style="color: var(--teal)">Day 1</div>
                 </div>
@@ -146,25 +155,31 @@
                 </div>
             </div>
 
-            <!-- Quick Actions -->
-            <div class="hud-section" style="border-bottom: none;">
+            <!-- Menu Buttons -->
+            <div class="hud-section">
                 <div class="hud-section-title">Menu</div>
                 <button class="hud-btn" id="btn-stats">
-                    <i class="fa-solid fa-chart-simple"></i> Stats
+                    <i class="fa-solid fa-chart-bar"></i> Stats
                 </button>
                 <button class="hud-btn" id="btn-inventory">
-                    <i class="fa-solid fa-bag-shopping"></i> Inventory
+                    <i class="fa-solid fa-briefcase"></i> Inventory
+                </button>
+                <button class="hud-btn" id="btn-save">
+                    <i class="fa-solid fa-floppy-disk"></i> Save / Load
                 </button>
                 <button class="hud-btn" id="btn-map">
-                    <i class="fa-solid fa-map"></i> Map
+                    <i class="fa-solid fa-map-location-dot"></i> Map
                 </button>
                 <button class="hud-btn" id="btn-settings">
                     <i class="fa-solid fa-gear"></i> Settings
                 </button>
             </div>
+
         </aside>
 
-        <!-- ========== MAIN CONTENT ========== -->
+        <!-- ==========================================
+             MAIN CONTENT (Narrative + Actions)
+             ========================================== -->
         <main class="main-content">
 
             <!-- Location Banner -->
@@ -179,81 +194,76 @@
                     </div>
                 </div>
                 <div class="banner-actions">
-                    <button class="banner-btn" title="Map" id="btn-map-banner" onclick="document.getElementById('btn-map').click()">
-                        <i class="fa-solid fa-map-location-dot"></i>
-                    </button>
-                    <button class="banner-btn" title="Settings" onclick="document.getElementById('btn-settings').click()">
-                        <i class="fa-solid fa-bars"></i>
-                    </button>
+                    <button class="banner-btn" title="Party"><i class="fa-solid fa-user-group"></i></button>
+                    <button class="banner-btn" title="Menu"><i class="fa-solid fa-bars"></i></button>
                 </div>
             </div>
 
-            <!-- Enemy Encounter Panel -->
+            <!-- Enemy Encounter Panel (hidden by default) -->
             <div class="enemy-panel" id="enemy-panel">
                 <div class="enemy-info">
                     <div class="enemy-avatar" id="enemy-avatar">
                         <i class="fa-solid fa-skull"></i>
                     </div>
                     <div class="enemy-details">
-                        <div class="enemy-name" id="enemy-name">Enemy</div>
+                        <div class="enemy-name" id="enemy-name">Enemy Name</div>
                         <div class="enemy-hp-bar">
                             <div class="enemy-hp-fill" id="enemy-hp-fill" style="width: 100%"></div>
                         </div>
-                        <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 4px;">
-                            <span id="enemy-hp-text" style="font-family: var(--font-mono); font-size: 0.75rem; color: var(--blood);">30/30</span>
-                            <div class="enemy-stats-row">
-                                <span class="enemy-stat" id="enemy-atk">ATK: <span>5</span></span>
-                                <span class="enemy-stat" id="enemy-def">DEF: <span>2</span></span>
-                            </div>
+                        <div id="enemy-hp-text" class="resource-label-value mt-1" style="color: var(--blood);">30/30
                         </div>
+                    </div>
+                    <div class="enemy-stats-row">
+                        <span class="enemy-stat" id="enemy-atk">ATK: <span>5</span></span>
+                        <span class="enemy-stat" id="enemy-def">DEF: <span>2</span></span>
                     </div>
                 </div>
             </div>
 
-            <!-- Narrative Window -->
+            <!-- Narrative Container (Chat History) -->
             <div class="narrative-container" id="narrative-container">
-                <!-- Messages will be injected here by ui.js -->
+                <!-- Narrative messages rendered here by JS -->
             </div>
 
-            <!-- Action Panel -->
+            <!-- Action Panel (Choices + Input) -->
             <div class="action-panel">
-                <!-- Choice Buttons -->
                 <div class="choices-container" id="choices-container">
-                    <!-- Choices will be injected here by ui.js -->
+                    <!-- Choice buttons rendered here by JS -->
                 </div>
-
-                <!-- Custom Text Input -->
                 <div class="input-container">
-                    <input type="text" class="custom-input" id="custom-input" placeholder="Type a custom action... (e.g. 'explore', 'attack', 'use healing potion')">
+                    <input type="text" class="custom-input" id="custom-input"
+                        placeholder="Type a custom action... (e.g. 'explore', 'attack', 'use healing potion')">
                     <button class="send-btn" id="send-btn">
-                        <i class="fa-solid fa-paper-plane"></i>
-                        Send
+                        <i class="fa-solid fa-paper-plane"></i> Send
                     </button>
                 </div>
             </div>
         </main>
+
     </div>
 
     <!-- ========== LEVEL UP OVERLAY ========== -->
     <div class="level-up-overlay" id="level-up-overlay">
-        <div class="level-up-text">⚔️ LEVEL UP! ⚔️</div>
+        <div class="level-up-text">LEVEL UP!</div>
         <div class="level-up-sublabel" id="level-up-level">Level 2</div>
-        <button class="level-up-dismiss" id="level-up-dismiss">ALLOCATE STATS →</button>
+        <button class="level-up-dismiss" id="level-up-dismiss">ALLOCATE STATS</button>
     </div>
 
     <!-- ========== TOAST CONTAINER ========== -->
     <div class="game-toast-container" id="toast-container"></div>
 
-    <!-- ========== STATS MODAL ========== -->
+    <!-- ==========================================
+         STATS MODAL
+         ========================================== -->
     <div class="modal fade game-modal" id="statsModal" tabindex="-1">
-        <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-dialog modal-dialog-centered modal-lg">
             <div class="modal-content">
                 <div class="modal-header">
-                    <h5 class="modal-title"><i class="fa-solid fa-chart-simple"></i> Character Stats</h5>
+                    <h5 class="modal-title"><i class="fa-solid fa-chart-bar"></i> Character Stats</h5>
                     <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
                 </div>
                 <div class="modal-body">
-                    <!-- Available Stat Points -->
+                    <!-- Stat Points -->
                     <div class="stat-points-header">
                         <div class="stat-points-label">Available Stat Points</div>
                         <div class="stat-points-value" id="modal-stat-points">0</div>
@@ -262,12 +272,13 @@
                     <!-- STR -->
                     <div class="stat-upgrade-row">
                         <div class="stat-upgrade-left">
-                            <div class="stat-upgrade-icon" style="background: rgba(255,107,53,0.15); color: var(--ember);">
-                                <i class="fa-solid fa-hand-fist"></i>
+                            <div class="stat-upgrade-icon"
+                                style="background: rgba(255, 107, 53, 0.18); color: var(--ember);">
+                                <i class="fa-solid fa-fist-raised"></i>
                             </div>
                             <div class="stat-upgrade-info">
                                 <div class="stat-upgrade-name">Strength</div>
-                                <div class="stat-upgrade-desc">Physical damage & max HP</div>
+                                <div class="stat-upgrade-desc">Increases physical damage and max HP</div>
                             </div>
                         </div>
                         <div class="stat-upgrade-right">
@@ -279,12 +290,13 @@
                     <!-- DEF -->
                     <div class="stat-upgrade-row">
                         <div class="stat-upgrade-left">
-                            <div class="stat-upgrade-icon" style="background: rgba(0,180,216,0.15); color: var(--mana-blue);">
+                            <div class="stat-upgrade-icon"
+                                style="background: rgba(0, 180, 216, 0.18); color: var(--mana-blue);">
                                 <i class="fa-solid fa-shield-halved"></i>
                             </div>
                             <div class="stat-upgrade-info">
                                 <div class="stat-upgrade-name">Defense</div>
-                                <div class="stat-upgrade-desc">Reduces incoming damage</div>
+                                <div class="stat-upgrade-desc">Reduces incoming damage taken</div>
                             </div>
                         </div>
                         <div class="stat-upgrade-right">
@@ -296,12 +308,13 @@
                     <!-- INT -->
                     <div class="stat-upgrade-row">
                         <div class="stat-upgrade-left">
-                            <div class="stat-upgrade-icon" style="background: rgba(99,102,241,0.15); color: var(--purple-accent);">
+                            <div class="stat-upgrade-icon"
+                                style="background: rgba(139, 92, 246, 0.18); color: var(--purple-accent);">
                                 <i class="fa-solid fa-book-open"></i>
                             </div>
                             <div class="stat-upgrade-info">
                                 <div class="stat-upgrade-name">Intelligence</div>
-                                <div class="stat-upgrade-desc">Magic damage & max Mana</div>
+                                <div class="stat-upgrade-desc">Boosts magic damage and max MP</div>
                             </div>
                         </div>
                         <div class="stat-upgrade-right">
@@ -313,12 +326,13 @@
                     <!-- AGI -->
                     <div class="stat-upgrade-row">
                         <div class="stat-upgrade-left">
-                            <div class="stat-upgrade-icon" style="background: rgba(0,245,212,0.15); color: var(--teal);">
-                                <i class="fa-solid fa-feather"></i>
+                            <div class="stat-upgrade-icon"
+                                style="background: rgba(0, 245, 212, 0.18); color: var(--teal);">
+                                <i class="fa-solid fa-bolt"></i>
                             </div>
                             <div class="stat-upgrade-info">
                                 <div class="stat-upgrade-name">Agility</div>
-                                <div class="stat-upgrade-desc">Dodge chance & flee success</div>
+                                <div class="stat-upgrade-desc">Improves dodge chance and flee success</div>
                             </div>
                         </div>
                         <div class="stat-upgrade-right">
@@ -328,7 +342,7 @@
                     </div>
                 </div>
                 <div class="modal-footer">
-                    <button type="button" class="hud-btn" data-bs-dismiss="modal" style="margin: 0;">
+                    <button type="button" class="hud-btn" data-bs-dismiss="modal" style="max-width: 200px;">
                         <i class="fa-solid fa-check"></i> Done
                     </button>
                 </div>
@@ -336,12 +350,14 @@
         </div>
     </div>
 
-    <!-- ========== INVENTORY MODAL ========== -->
+    <!-- ==========================================
+         INVENTORY MODAL
+         ========================================== -->
     <div class="modal fade game-modal" id="inventoryModal" tabindex="-1">
         <div class="modal-dialog modal-dialog-centered modal-lg">
             <div class="modal-content">
                 <div class="modal-header">
-                    <h5 class="modal-title"><i class="fa-solid fa-bag-shopping"></i> Inventory</h5>
+                    <h5 class="modal-title"><i class="fa-solid fa-briefcase"></i> Inventory</h5>
                     <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
                 </div>
                 <div class="modal-body">
@@ -350,14 +366,14 @@
                         <div class="equipment-title">Equipped Gear</div>
                         <div class="equipment-slots">
                             <div class="equip-slot">
-                                <i class="fa-solid fa-hammer" id="equipped-weapon-icon" style="color: var(--ember); font-size: 1.4rem;"></i>
+                                <i class="fa-solid fa-hammer" id="equipped-weapon-icon" style="color: var(--ember)"></i>
                                 <div class="equip-slot-info">
                                     <span class="equip-slot-type">Weapon</span>
                                     <span class="equip-slot-name" id="equipped-weapon-name">Rusted Pipe</span>
                                 </div>
                             </div>
                             <div class="equip-slot">
-                                <i class="fa-solid fa-shirt" id="equipped-armor-icon" style="color: var(--text-muted); font-size: 1.4rem;"></i>
+                                <i class="fa-solid fa-shirt" id="equipped-armor-icon" style="color: #6c757d"></i>
                                 <div class="equip-slot-info">
                                     <span class="equip-slot-type">Armor</span>
                                     <span class="equip-slot-name" id="equipped-armor-name">Padded Clothing</span>
@@ -366,14 +382,38 @@
                         </div>
                     </div>
 
-                    <!-- Inventory Grid -->
+                    <!-- Items Grid -->
                     <div class="equipment-title">Items</div>
                     <div class="inventory-grid" id="inventory-grid">
-                        <!-- Items will be injected by ui.js -->
+                        <!-- Rendered by JS -->
                     </div>
                 </div>
                 <div class="modal-footer">
-                    <button type="button" class="hud-btn" data-bs-dismiss="modal" style="margin: 0;">
+                    <button type="button" class="hud-btn" data-bs-dismiss="modal" style="max-width: 200px;">
+                        <i class="fa-solid fa-check"></i> Close
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ==========================================
+         SAVE / LOAD MODAL
+         ========================================== -->
+    <div class="modal fade game-modal" id="saveModal" tabindex="-1">
+        <div class="modal-dialog modal-dialog-centered modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title"><i class="fa-solid fa-floppy-disk"></i> Save / Load Game</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <div id="save-slots-container">
+                        <!-- 5 save slots rendered by JS -->
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="hud-btn" data-bs-dismiss="modal" style="max-width: 200px;">
                         <i class="fa-solid fa-check"></i> Close
                     </button>
                 </div>
@@ -387,4 +427,5 @@
     <script src="js/game.js"></script>
     <script src="js/ui.js"></script>
 </body>
+
 </html>
