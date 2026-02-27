@@ -1,11 +1,15 @@
 // ============================================================
-// THE SHIMMERING WASTES — UI Controller v2.0
-// DOM manipulation, animations, save modal, particle hookups
+// THE SHIMMERING WASTES — UI Controller v2.1
+// DOM manipulation, animations, interactive enhancements
+// Floating numbers, screen shake, tooltips, ripples, shortcuts
 // ============================================================
 
 const UI = (() => {
     // ---- DOM References ----
     const dom = {};
+
+    // ---- Previous state for change detection ----
+    let prevState = null;
 
     function cacheDom() {
         dom.hpFill = document.getElementById("hp-fill");
@@ -53,12 +57,16 @@ const UI = (() => {
         dom.saveModal = document.getElementById("saveModal");
     }
 
-    // ---- Update HUD ----
+    // ---- Update HUD with change detection ----
     function updateHUD(state) {
         // HP Bar
         const hpPercent = (state.hp / state.maxHp) * 100;
         dom.hpFill.style.width = hpPercent + "%";
         dom.hpValue.textContent = `${state.hp}/${state.maxHp}`;
+
+        // HP critical warning (below 25%)
+        const hpGroup = document.querySelector(".bar-hp");
+        hpGroup.classList.toggle("critical", hpPercent <= 25 && state.hp > 0);
 
         // MP Bar
         const mpPercent = (state.mp / state.maxMp) * 100;
@@ -71,13 +79,17 @@ const UI = (() => {
         dom.expValue.textContent = `${state.exp}/${state.expToLevel}`;
         dom.levelBadge.textContent = `Lv. ${state.level}`;
 
-        // Stats
-        dom.statStr.textContent = state.str;
-        dom.statDef.textContent = state.def;
-        dom.statInt.textContent = state.int;
-        dom.statAgi.textContent = state.agi;
+        // Stats — with change flash animation
+        updateStatWithFlash(dom.statStr, state.str, "str");
+        updateStatWithFlash(dom.statDef, state.def, "def");
+        updateStatWithFlash(dom.statInt, state.int, "int");
+        updateStatWithFlash(dom.statAgi, state.agi, "agi");
 
-        // Economy
+        // Economy — with change flash
+        if (prevState && prevState.coins !== state.coins) {
+            dom.coins.classList.add("stat-changed");
+            setTimeout(() => dom.coins.classList.remove("stat-changed"), 600);
+        }
         dom.coins.textContent = state.coins;
 
         // Time
@@ -88,6 +100,18 @@ const UI = (() => {
 
         // Combat mode
         dom.gameContainer.classList.toggle("combat-mode", state.combatActive);
+
+        // Save previous state for change detection
+        prevState = { ...state };
+    }
+
+    function updateStatWithFlash(el, newVal, statName) {
+        const oldVal = parseInt(el.textContent) || 0;
+        if (oldVal !== newVal && prevState) {
+            el.classList.add("stat-changed");
+            setTimeout(() => el.classList.remove("stat-changed"), 600);
+        }
+        el.textContent = newVal;
     }
 
     // ---- Update Location Banner ----
@@ -103,7 +127,7 @@ const UI = (() => {
     // ---- Narrative Messages ----
     function addNarrative(html, type) {
         const msgDiv = document.createElement("div");
-        msgDiv.className = `narrative-message message-${type === "gm" ? "gm" : "player"}`;
+        msgDiv.className = `narrative-message message-${type === "gm" ? "gm" : "player"} message-new`;
 
         const sender = type === "gm"
             ? `<div class="message-sender"><i class="fa-solid fa-scroll"></i> The Wastes</div>`
@@ -116,17 +140,21 @@ const UI = (() => {
 
         dom.narrativeContainer.appendChild(msgDiv);
 
+        // Remove new-message glow after animation
+        setTimeout(() => msgDiv.classList.remove("message-new"), 1500);
+
         // Scroll to bottom
         requestAnimationFrame(() => {
             dom.narrativeContainer.scrollTop = dom.narrativeContainer.scrollHeight;
         });
     }
 
-    // ---- Show Choices ----
+    // ---- Show Choices with keyboard hints ----
     function showChoices(choices) {
         dom.choicesContainer.innerHTML = "";
+        const keyMap = ["1", "2", "3", "4"];
 
-        choices.forEach(choice => {
+        choices.forEach((choice, index) => {
             const btn = document.createElement("button");
             btn.className = "choice-btn";
             btn.dataset.choice = choice.id;
@@ -142,12 +170,18 @@ const UI = (() => {
                 btn.classList.add("combat-flee");
             }
 
+            // Add keyboard shortcut hint
+            const kbdHint = index < 4 ? `<span class="kbd-hint">${keyMap[index]}</span>` : "";
+
             btn.innerHTML = `
                 <i class="fa-solid ${choice.icon}"></i>
                 <span>${choice.text}</span>
+                ${kbdHint}
             `;
 
-            btn.addEventListener("click", () => {
+            // Ripple effect on click
+            btn.addEventListener("click", (e) => {
+                createRipple(e, btn);
                 GameEngine.processChoice(choice.id);
             });
 
@@ -162,6 +196,19 @@ const UI = (() => {
             btn.style.opacity = "0.35";
             btn.style.pointerEvents = "none";
         });
+    }
+
+    // ---- Click Ripple Effect ----
+    function createRipple(event, element) {
+        const rect = element.getBoundingClientRect();
+        const ripple = document.createElement("span");
+        ripple.className = "ripple";
+        const size = Math.max(rect.width, rect.height);
+        ripple.style.width = ripple.style.height = size + "px";
+        ripple.style.left = (event.clientX - rect.left - size / 2) + "px";
+        ripple.style.top = (event.clientY - rect.top - size / 2) + "px";
+        element.appendChild(ripple);
+        setTimeout(() => ripple.remove(), 600);
     }
 
     // ---- Typing Indicator ----
@@ -186,16 +233,46 @@ const UI = (() => {
         if (indicator) indicator.remove();
     }
 
-    // ---- Damage Flash ----
+    // ---- Damage Flash + Screen Shake ----
     function flashDamage() {
         const hpGroup = document.querySelector(".bar-hp");
         hpGroup.classList.add("damage-flash");
         dom.gameContainer.classList.add("damage-flash-screen");
 
+        // Screen shake
+        dom.gameContainer.classList.add("screen-shake");
+
         setTimeout(() => {
             hpGroup.classList.remove("damage-flash");
             dom.gameContainer.classList.remove("damage-flash-screen");
+            dom.gameContainer.classList.remove("screen-shake");
         }, 600);
+    }
+
+    // ---- Floating Combat Numbers ----
+    function showFloatingNumber(text, type, x, y) {
+        const el = document.createElement("div");
+        el.className = `floating-number ${type}`;
+        el.textContent = text;
+
+        // Position near the HP bar area if no coords given
+        if (!x || !y) {
+            const hpBar = document.querySelector(".bar-hp .resource-bar");
+            if (hpBar) {
+                const rect = hpBar.getBoundingClientRect();
+                x = rect.left + rect.width / 2 + (Math.random() - 0.5) * 60;
+                y = rect.top;
+            } else {
+                x = window.innerWidth / 2;
+                y = window.innerHeight / 3;
+            }
+        }
+
+        el.style.left = x + "px";
+        el.style.top = y + "px";
+        document.body.appendChild(el);
+
+        setTimeout(() => el.remove(), 1500);
     }
 
     // ---- Enemy Panel ----
@@ -300,20 +377,30 @@ const UI = (() => {
             if (!item) return;
 
             const div = document.createElement("div");
-            div.className = "inventory-slot";
+            // Item rarity classes
+            const rarity = item.type === "quest" ? "rarity-legendary" :
+                item.type === "valuable" && item.sellPrice && item.sellPrice.min >= 10 ? "rarity-rare" :
+                    item.type === "consumable" ? "rarity-uncommon" : "rarity-common";
+            div.className = `inventory-slot ${rarity}`;
             div.innerHTML = `
                 <i class="fa-solid ${item.icon}" style="color: ${item.iconColor}"></i>
                 <div class="inventory-slot-name">${item.name}</div>
                 ${slot.qty > 1 ? `<div class="inventory-slot-qty">x${slot.qty}</div>` : ""}
             `;
 
+            // Tooltip on hover
+            div.addEventListener("mouseenter", (e) => {
+                showGameTooltip(item, e);
+            });
+            div.addEventListener("mouseleave", hideGameTooltip);
+            div.addEventListener("mousemove", moveGameTooltip);
+
             if (item.type === "consumable") {
-                div.addEventListener("click", () => {
+                div.addEventListener("click", (e) => {
+                    createRipple(e, div);
                     GameEngine.useItem(slot.id);
                 });
-                div.title = `Click to use: ${item.description}`;
-            } else {
-                div.title = item.description;
+                div.style.cursor = "pointer";
             }
 
             grid.appendChild(div);
@@ -327,6 +414,121 @@ const UI = (() => {
             div.innerHTML = `<i class="fa-solid fa-lock" style="color: var(--text-muted)"></i>`;
             grid.appendChild(div);
         }
+    }
+
+    // ---- Game Tooltip System ----
+    let activeTooltip = null;
+
+    function showGameTooltip(item, event) {
+        hideGameTooltip();
+
+        const tip = document.createElement("div");
+        tip.className = "game-tooltip";
+        tip.id = "active-game-tooltip";
+
+        let statLine = "";
+        if (item.effect) {
+            if (item.effect.hp) statLine += `<div class="game-tooltip-stat">❤️ Restores ${item.effect.hp} HP</div>`;
+            if (item.effect.mp) statLine += `<div class="game-tooltip-stat">💧 Restores ${item.effect.mp} MP</div>`;
+        }
+        if (item.bonusStat) {
+            const entries = Object.entries(item.bonusStat);
+            entries.forEach(([k, v]) => {
+                statLine += `<div class="game-tooltip-stat">⚔️ +${v} ${k.toUpperCase()}</div>`;
+            });
+        }
+        if (item.cost) {
+            statLine += `<div class="game-tooltip-stat">💰 Cost: ${item.cost} coins</div>`;
+        }
+        if (item.sellPrice) {
+            statLine += `<div class="game-tooltip-stat">💰 Sell: ${item.sellPrice.min}-${item.sellPrice.max} coins</div>`;
+        }
+
+        const typeLabel = item.type.charAt(0).toUpperCase() + item.type.slice(1);
+
+        tip.innerHTML = `
+            <div class="game-tooltip-title">${item.name} <small style="color:var(--text-muted);font-family:var(--font-ui);font-size:0.7rem;">[${typeLabel}]</small></div>
+            <div class="game-tooltip-desc">${item.description}</div>
+            ${statLine}
+        `;
+
+        document.body.appendChild(tip);
+        activeTooltip = tip;
+
+        // Position
+        positionTooltip(event.clientX, event.clientY);
+    }
+
+    function moveGameTooltip(event) {
+        if (activeTooltip) {
+            positionTooltip(event.clientX, event.clientY);
+        }
+    }
+
+    function positionTooltip(x, y) {
+        if (!activeTooltip) return;
+        const pad = 15;
+        let left = x + pad;
+        let top = y + pad;
+
+        // Keep on screen
+        const rect = activeTooltip.getBoundingClientRect();
+        if (left + rect.width > window.innerWidth) {
+            left = x - rect.width - pad;
+        }
+        if (top + rect.height > window.innerHeight) {
+            top = y - rect.height - pad;
+        }
+
+        activeTooltip.style.left = left + "px";
+        activeTooltip.style.top = top + "px";
+    }
+
+    function hideGameTooltip() {
+        const existing = document.getElementById("active-game-tooltip");
+        if (existing) existing.remove();
+        activeTooltip = null;
+    }
+
+    // ---- HUD Stat Tooltips ----
+    function initStatTooltips() {
+        const statDescriptions = {
+            str: { name: "Strength", desc: "Boosts physical damage and max HP" },
+            def: { name: "Defense", desc: "Reduces incoming damage from attacks" },
+            int: { name: "Intelligence", desc: "Increases magic damage and max MP" },
+            agi: { name: "Agility", desc: "Improves dodge and flee success rate" }
+        };
+
+        document.querySelectorAll(".stat-item").forEach(item => {
+            const statClass = item.querySelector(".stat-icon")?.classList;
+            let statKey = null;
+            if (statClass) {
+                if (statClass.contains("str")) statKey = "str";
+                else if (statClass.contains("def")) statKey = "def";
+                else if (statClass.contains("int")) statKey = "int";
+                else if (statClass.contains("agi")) statKey = "agi";
+            }
+
+            if (statKey) {
+                item.dataset.tooltip = "true";
+                item.addEventListener("mouseenter", (e) => {
+                    const info = statDescriptions[statKey];
+                    const tip = document.createElement("div");
+                    tip.className = "game-tooltip";
+                    tip.id = "active-game-tooltip";
+                    tip.innerHTML = `
+                        <div class="game-tooltip-title">${info.name}</div>
+                        <div class="game-tooltip-desc">${info.desc}</div>
+                    `;
+                    document.body.appendChild(tip);
+                    activeTooltip = tip;
+                    positionTooltip(e.clientX, e.clientY);
+                });
+
+                item.addEventListener("mouseleave", hideGameTooltip);
+                item.addEventListener("mousemove", moveGameTooltip);
+            }
+        });
     }
 
     // ---- Save / Load Modal ----
@@ -395,6 +597,7 @@ const UI = (() => {
         container.querySelectorAll("[data-save]").forEach(btn => {
             btn.addEventListener("click", (e) => {
                 e.stopPropagation();
+                createRipple(e, btn);
                 GameEngine.saveGame(parseInt(btn.dataset.save));
             });
         });
@@ -402,6 +605,7 @@ const UI = (() => {
         container.querySelectorAll("[data-load]").forEach(btn => {
             btn.addEventListener("click", (e) => {
                 e.stopPropagation();
+                createRipple(e, btn);
                 GameEngine.loadGame(parseInt(btn.dataset.load));
                 bootstrap.Modal.getInstance(dom.saveModal).hide();
             });
@@ -412,6 +616,42 @@ const UI = (() => {
                 e.stopPropagation();
                 GameEngine.deleteSave(parseInt(btn.dataset.delete));
             });
+        });
+    }
+
+    // ---- Keyboard Shortcuts ----
+    function initKeyboardShortcuts() {
+        document.addEventListener("keydown", (e) => {
+            // Don't trigger if typing in input
+            if (document.activeElement === dom.customInput) return;
+            // Don't trigger if a modal is open
+            if (document.querySelector(".modal.show")) return;
+
+            switch (e.key) {
+                case "1": case "2": case "3": case "4":
+                    const idx = parseInt(e.key) - 1;
+                    const btns = dom.choicesContainer.querySelectorAll(".choice-btn:not([disabled])");
+                    if (btns[idx]) {
+                        btns[idx].click();
+                    }
+                    break;
+                case "s":
+                case "S":
+                    if (!e.ctrlKey && !e.metaKey) openStatsModal();
+                    break;
+                case "i":
+                case "I":
+                    openInventoryModal();
+                    break;
+                case "f":
+                case "F":
+                    openSaveModal();
+                    break;
+                case "/":
+                    e.preventDefault();
+                    dom.customInput.focus();
+                    break;
+            }
         });
     }
 
@@ -442,7 +682,8 @@ const UI = (() => {
 
         // Stat allocation buttons
         document.querySelectorAll(".stat-upgrade-btn").forEach(btn => {
-            btn.addEventListener("click", () => {
+            btn.addEventListener("click", (e) => {
+                createRipple(e, btn);
                 const stat = btn.dataset.stat;
                 GameEngine.allocateStat(stat);
             });
@@ -454,7 +695,12 @@ const UI = (() => {
             openStatsModal();
         });
 
-        // HUD buttons
+        // HUD buttons — with ripple
+        const hudBtns = document.querySelectorAll(".hud-btn");
+        hudBtns.forEach(btn => {
+            btn.addEventListener("click", (e) => createRipple(e, btn));
+        });
+
         document.getElementById("btn-stats").addEventListener("click", openStatsModal);
         document.getElementById("btn-inventory").addEventListener("click", openInventoryModal);
         document.getElementById("btn-save").addEventListener("click", openSaveModal);
@@ -464,6 +710,10 @@ const UI = (() => {
         document.getElementById("btn-settings").addEventListener("click", () => {
             showToast("Settings coming soon!", "warning", "fa-gear");
         });
+
+        // Init interactive systems
+        initKeyboardShortcuts();
+        initStatTooltips();
     }
 
     // ---- Public API ----
@@ -477,6 +727,7 @@ const UI = (() => {
         showTypingIndicator,
         hideTypingIndicator,
         flashDamage,
+        showFloatingNumber,
         showEnemyPanel,
         updateEnemyHp,
         hideEnemyPanel,

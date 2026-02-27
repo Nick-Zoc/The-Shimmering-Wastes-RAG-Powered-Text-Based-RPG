@@ -1,7 +1,7 @@
 // ============================================================
-// THE SHIMMERING WASTES — Mock Game Engine v2.0
+// THE SHIMMERING WASTES — Mock Game Engine v2.1
 // State management, game logic, time-of-day theming,
-// particle effects, and save system
+// particle effects, save system, floating combat numbers
 // ============================================================
 
 const GameEngine = (() => {
@@ -109,6 +109,9 @@ const GameEngine = (() => {
             if (updates.hp_change < 0) {
                 UI.flashDamage();
                 UI.showToast(`${updates.hp_change} HP`, "danger", "fa-heart-crack");
+                UI.showFloatingNumber(`${updates.hp_change}`, "damage");
+            } else {
+                UI.showFloatingNumber(`+${updates.hp_change}`, "heal");
             }
         }
 
@@ -122,6 +125,7 @@ const GameEngine = (() => {
         if (updates.exp_change) {
             state.exp += updates.exp_change;
             UI.showToast(`+${updates.exp_change} EXP`, "success", "fa-star");
+            UI.showFloatingNumber(`+${updates.exp_change} XP`, "xp");
             checkLevelUp();
         }
 
@@ -129,6 +133,7 @@ const GameEngine = (() => {
             state.coins += updates.coins_change;
             if (updates.coins_change > 0) {
                 UI.showToast(`+${updates.coins_change} Coins`, "success", "fa-coins");
+                UI.showFloatingNumber(`+${updates.coins_change}`, "coins");
             } else {
                 UI.showToast(`${updates.coins_change} Coins`, "warning", "fa-coins");
             }
@@ -298,6 +303,7 @@ It is now <strong>Morning of Day ${state.day}</strong>.`, "gm");
         if (item.effect.hp) {
             state.hp = Math.min(state.maxHp, state.hp + item.effect.hp);
             UI.showToast(`+${item.effect.hp} HP`, "success", "fa-heart");
+            UI.showFloatingNumber(`+${item.effect.hp}`, "heal");
         }
         if (item.effect.mp) {
             state.mp = Math.min(state.maxMp, state.mp + item.effect.mp);
@@ -484,13 +490,35 @@ const ParticleEngine = (() => {
         3: ["#4060ff", "#6080ff", "#8090c0", "#2040a0"]        // Night: cool blue
     };
 
+    // Detect mobile/low-end for reduced particles
+    const isMobile = /Mobi|Android|iPhone/i.test(navigator.userAgent) || window.innerWidth < 768;
+    const PARTICLE_COUNT = isMobile ? 30 : 50;
+
     function init() {
         canvas = document.getElementById("particle-canvas");
         if (!canvas) return;
         ctx = canvas.getContext("2d");
         resize();
-        window.addEventListener("resize", resize);
-        createParticles(60);
+
+        // Debounced resize for performance
+        let resizeTimer;
+        window.addEventListener("resize", () => {
+            clearTimeout(resizeTimer);
+            resizeTimer = setTimeout(resize, 150);
+        });
+
+        createParticles(PARTICLE_COUNT);
+
+        // Pause when tab is hidden to save CPU
+        document.addEventListener("visibilitychange", () => {
+            if (document.hidden) {
+                if (animFrame) cancelAnimationFrame(animFrame);
+                animFrame = null;
+            } else {
+                if (!animFrame) animate();
+            }
+        });
+
         animate();
     }
 
@@ -511,19 +539,18 @@ const ParticleEngine = (() => {
         return {
             x: Math.random() * (canvas ? canvas.width : window.innerWidth),
             y: Math.random() * (canvas ? canvas.height : window.innerHeight),
-            size: Math.random() * 3 + 1,
-            speedX: (Math.random() - 0.5) * 0.4,
-            speedY: -Math.random() * 0.3 - 0.1,
-            opacity: Math.random() * 0.5 + 0.1,
+            size: Math.random() * 2.5 + 0.8,
+            speedX: (Math.random() - 0.5) * 0.3,
+            speedY: -Math.random() * 0.25 - 0.05,
+            opacity: Math.random() * 0.4 + 0.1,
             color: palette[Math.floor(Math.random() * palette.length)],
             pulse: Math.random() * Math.PI * 2,
-            pulseSpeed: Math.random() * 0.02 + 0.005
+            pulseSpeed: Math.random() * 0.015 + 0.005
         };
     }
 
     function setTimePhase(phase) {
         timePhase = phase;
-        // Gradually recolor particles
         const palette = PARTICLE_PALETTES[phase] || PARTICLE_PALETTES[0];
         particles.forEach(p => {
             p.color = palette[Math.floor(Math.random() * palette.length)];
@@ -534,31 +561,46 @@ const ParticleEngine = (() => {
         if (!ctx || !canvas) return;
         ctx.clearRect(0, 0, canvas.width, canvas.height);
 
+        const w = canvas.width;
+        const h = canvas.height;
+
+        // Batch by color to minimize state changes
+        const byColor = {};
         particles.forEach(p => {
             p.x += p.speedX;
             p.y += p.speedY;
             p.pulse += p.pulseSpeed;
 
-            const currentOpacity = p.opacity * (0.5 + 0.5 * Math.sin(p.pulse));
-
             // Wrap around
-            if (p.y < -10) { p.y = canvas.height + 10; p.x = Math.random() * canvas.width; }
-            if (p.x < -10) p.x = canvas.width + 10;
-            if (p.x > canvas.width + 10) p.x = -10;
+            if (p.y < -10) { p.y = h + 10; p.x = Math.random() * w; }
+            if (p.x < -10) p.x = w + 10;
+            if (p.x > w + 10) p.x = -10;
 
-            ctx.beginPath();
-            ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
-            ctx.fillStyle = p.color;
-            ctx.globalAlpha = currentOpacity;
-            ctx.fill();
-
-            // Glow effect
-            ctx.beginPath();
-            ctx.arc(p.x, p.y, p.size * 3, 0, Math.PI * 2);
-            ctx.fillStyle = p.color;
-            ctx.globalAlpha = currentOpacity * 0.15;
-            ctx.fill();
+            if (!byColor[p.color]) byColor[p.color] = [];
+            byColor[p.color].push(p);
         });
+
+        // Draw batched by color
+        for (const color in byColor) {
+            ctx.fillStyle = color;
+            byColor[color].forEach(p => {
+                const alpha = p.opacity * (0.5 + 0.5 * Math.sin(p.pulse));
+
+                // Main dot
+                ctx.globalAlpha = alpha;
+                ctx.beginPath();
+                ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
+                ctx.fill();
+
+                // Soft glow (skip on mobile for perf)
+                if (!isMobile) {
+                    ctx.globalAlpha = alpha * 0.12;
+                    ctx.beginPath();
+                    ctx.arc(p.x, p.y, p.size * 2.5, 0, Math.PI * 2);
+                    ctx.fill();
+                }
+            });
+        }
 
         ctx.globalAlpha = 1;
         animFrame = requestAnimationFrame(animate);
@@ -566,6 +608,7 @@ const ParticleEngine = (() => {
 
     function destroy() {
         if (animFrame) cancelAnimationFrame(animFrame);
+        animFrame = null;
     }
 
     return { init, setTimePhase, destroy };

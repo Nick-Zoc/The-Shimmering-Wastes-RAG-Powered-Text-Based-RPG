@@ -4,7 +4,7 @@
    ============================================================ */
 
 /* ---- Google Fonts (Bold + Playful RPG Style) ---- */
-@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800;900&family=Orbitron:wght@400;500;600;700;800;900&family=Space+Grotesk:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@400;500;600;700;800;900&family=Outfit:wght@300;400;500;600;700;800;900&family=Space+Grotesk:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap');
 
 /* ============================================================
    CSS CUSTOM PROPERTIES — Dynamic Time-of-Day Palette
@@ -57,7 +57,7 @@
     --border-active: rgba(0, 245, 212, 0.5);
 
     /* ---- Typography ---- */
-    --font-heading: 'Orbitron', sans-serif;
+    --font-heading: 'Cinzel', serif;
     --font-body: 'Outfit', sans-serif;
     --font-mono: 'JetBrains Mono', monospace;
     --font-ui: 'Space Grotesk', sans-serif;
@@ -1904,5 +1904,330 @@ body::before {
 
     .level-up-text {
         font-size: 2.8rem;
+    }
+}
+
+/* ============================================================
+   INTERACTIVE ENHANCEMENTS
+   ============================================================ */
+
+/* ---- Click Ripple Effect on Buttons ---- */
+.ripple {
+    position: absolute;
+    border-radius: 50%;
+    background: rgba(0, 245, 212, 0.25);
+    transform: scale(0);
+    animation: rippleExpand 0.6s ease-out forwards;
+    pointer-events: none;
+}
+
+@keyframes rippleExpand {
+    to {
+        transform: scale(4);
+        opacity: 0;
+    }
+}
+
+/* ---- Screen Shake (Combat Hits) ---- */
+@keyframes screenShake {
+
+    0%,
+    100% {
+        transform: translate(0, 0);
+    }
+
+    10% {
+        transform: translate(-3px, -2px);
+    }
+
+    20% {
+        transform: translate(4px, 1px);
+    }
+
+    30% {
+        transform: translate(-2px, 3px);
+    }
+
+    40% {
+        transform: translate(3px, -1px);
+    }
+
+    50% {
+        transform: translate(-1px, 2px);
+    }
+
+    60% {
+        transform: translate(2px, -3px);
+    }
+
+    70% {
+        transform: translate(-4px, 1px);
+    }
+
+    80% {
+        transform: translate(1px, -2px);
+    }
+
+    90% {
+        transform: translate(-2px, 3px);
+    }
+}
+
+.screen-shake {
+    animation: screenShake 0.4s ease;
+}
+
+/* ---- Floating Combat Numbers ---- */
+.floating-number {
+    position: fixed;
+    font-family: var(--font-heading);
+    font-weight: 900;
+    font-size: 1.8rem;
+    pointer-events: none;
+    z-index: 10001;
+    text-shadow: 0 2px 8px rgba(0, 0, 0, 0.6);
+    animation: floatUp 1.4s ease-out forwards;
+}
+
+.floating-number.damage {
+    color: var(--blood);
+}
+
+.floating-number.heal {
+    color: var(--teal);
+}
+
+.floating-number.xp {
+    color: var(--gold);
+}
+
+.floating-number.coins {
+    color: var(--gold);
+    font-size: 1.4rem;
+}
+
+@keyframes floatUp {
+    0% {
+        opacity: 1;
+        transform: translateY(0) scale(0.5);
+    }
+
+    20% {
+        opacity: 1;
+        transform: translateY(-20px) scale(1.2);
+    }
+
+    100% {
+        opacity: 0;
+        transform: translateY(-80px) scale(0.8);
+    }
+}
+
+/* ---- Tooltip System ---- */
+.game-tooltip {
+    position: fixed;
+    background: var(--bg-dark);
+    border: 1px solid var(--border-active);
+    border-radius: 10px;
+    padding: 12px 16px;
+    max-width: 260px;
+    z-index: 10002;
+    pointer-events: none;
+    box-shadow: 0 8px 30px rgba(0, 0, 0, 0.6), 0 0 15px var(--teal-glow);
+    animation: tooltipFade 0.2s ease;
+}
+
+@keyframes tooltipFade {
+    from {
+        opacity: 0;
+        transform: translateY(5px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.game-tooltip-title {
+    font-family: var(--font-heading);
+    font-size: 0.85rem;
+    font-weight: 700;
+    color: var(--teal);
+    margin-bottom: 4px;
+}
+
+.game-tooltip-desc {
+    font-family: var(--font-body);
+    font-size: 0.82rem;
+    font-weight: 400;
+    color: var(--text-secondary);
+    line-height: 1.4;
+}
+
+.game-tooltip-stat {
+    font-family: var(--font-mono);
+    font-size: 0.78rem;
+    font-weight: 600;
+    color: var(--teal);
+    margin-top: 4px;
+}
+
+/* ---- Stat Change Flash ---- */
+@keyframes statFlash {
+    0% {
+        color: var(--teal);
+        transform: scale(1);
+    }
+
+    30% {
+        color: var(--gold);
+        transform: scale(1.4);
+    }
+
+    100% {
+        color: var(--text-primary);
+        transform: scale(1);
+    }
+}
+
+.stat-changed {
+    animation: statFlash 0.6s ease;
+}
+
+/* ---- New Message Glow Pulse ---- */
+.message-new .message-content {
+    animation: newMessageGlow 1.5s ease;
+}
+
+@keyframes newMessageGlow {
+    0% {
+        box-shadow: 0 0 0 transparent;
+    }
+
+    30% {
+        box-shadow: 0 0 20px var(--teal-glow);
+    }
+
+    100% {
+        box-shadow: 0 0 0 transparent;
+    }
+}
+
+/* ---- HUD Stat Item Hover Tooltip Highlight ---- */
+.stat-item[data-tooltip]:hover {
+    border-color: var(--teal);
+    box-shadow: 0 0 12px var(--teal-glow);
+}
+
+/* ---- Item Rarity Glow Borders ---- */
+.inventory-slot.rarity-common {
+    border-color: rgba(255, 255, 255, 0.15);
+}
+
+.inventory-slot.rarity-uncommon {
+    border-color: rgba(0, 245, 212, 0.4);
+    box-shadow: 0 0 8px rgba(0, 245, 212, 0.15);
+}
+
+.inventory-slot.rarity-rare {
+    border-color: rgba(139, 92, 246, 0.5);
+    box-shadow: 0 0 10px rgba(139, 92, 246, 0.2);
+}
+
+.inventory-slot.rarity-legendary {
+    border-color: rgba(255, 215, 0, 0.5);
+    box-shadow: 0 0 12px rgba(255, 215, 0, 0.25);
+    animation: legendaryPulse 3s ease-in-out infinite;
+}
+
+@keyframes legendaryPulse {
+
+    0%,
+    100% {
+        box-shadow: 0 0 10px rgba(255, 215, 0, 0.2);
+    }
+
+    50% {
+        box-shadow: 0 0 20px rgba(255, 215, 0, 0.4);
+    }
+}
+
+/* ---- Keyboard Shortcut Badges ---- */
+.kbd-hint {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 22px;
+    height: 22px;
+    padding: 0 6px;
+    background: var(--bg-deepest);
+    border: 1px solid var(--border-subtle);
+    border-radius: 4px;
+    font-family: var(--font-mono);
+    font-size: 0.65rem;
+    font-weight: 700;
+    color: var(--text-muted);
+    margin-left: auto;
+    opacity: 0.6;
+}
+
+/* ---- Choice Button Hover Shimmer ---- */
+.choice-btn::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: -100%;
+    width: 60%;
+    height: 100%;
+    background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.04), transparent);
+    transition: none;
+    z-index: 0;
+}
+
+.choice-btn:hover::after {
+    animation: choiceShimmer 0.8s ease;
+}
+
+@keyframes choiceShimmer {
+    from {
+        left: -60%;
+    }
+
+    to {
+        left: 120%;
+    }
+}
+
+/* ---- HP Bar Critical Warning ---- */
+.bar-hp.critical .resource-bar-fill {
+    animation: hpCriticalPulse 1s ease-in-out infinite;
+}
+
+@keyframes hpCriticalPulse {
+
+    0%,
+    100% {
+        opacity: 1;
+    }
+
+    50% {
+        opacity: 0.5;
+    }
+}
+
+.bar-hp.critical .resource-label-name {
+    animation: hpCriticalText 1s ease-in-out infinite;
+}
+
+@keyframes hpCriticalText {
+
+    0%,
+    100% {
+        color: var(--blood);
+    }
+
+    50% {
+        color: var(--text-primary);
     }
 }
