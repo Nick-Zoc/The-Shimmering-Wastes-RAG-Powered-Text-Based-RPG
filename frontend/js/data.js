@@ -218,6 +218,7 @@ He leans closer and whispers: <em>"A word of warning — the Ash Hounds are gett
         choices: [
             { id: "buy_potion", text: "Buy a Healing Potion (10 coins)", icon: "fa-heart" },
             { id: "buy_mana", text: "Buy a Mana Vial (15 coins)", icon: "fa-droplet" },
+            { id: "sell_items", text: "Sell your loot", icon: "fa-sack-dollar" },
             { id: "explore_bastion", text: "Walk away", icon: "fa-arrow-left" }
         ],
         stateUpdates: { time_advanced: false }
@@ -241,6 +242,12 @@ He leans closer and whispers: <em>"A word of warning — the Ash Hounds are gett
             { id: "explore_bastion", text: "Thanks, heading out", icon: "fa-arrow-left" }
         ],
         stateUpdates: { coins_change: -15, time_advanced: false, addItem: "mana_vial" }
+    },
+    sell_items: {
+        narrative: `Silas rubs his hands together. <em>"Let me see what you've got."</em> He peers at your bag with his big goggles. <em>"I'll buy any scraps, shards, or materials you've picked up. Fair prices, I promise."</em>`,
+        choices: [],
+        stateUpdates: { time_advanced: false },
+        triggerSellMenu: true
     },
     talk_elara: {
         narrative: `Elara looks up from her patient. The glowing marks on her skin fade as she turns to you. Her face is kind but tired.

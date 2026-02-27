@@ -2382,15 +2382,48 @@ body::before {
 .region-transition {
     position: fixed;
     inset: 0;
-    background: #000;
+    background: rgba(0, 0, 0, 0.95);
     z-index: 9999;
     pointer-events: none;
     opacity: 0;
     transition: opacity 0.4s ease;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
 }
 
 .region-transition.active {
     opacity: 1;
+}
+
+.region-transition-name {
+    font-family: var(--font-heading);
+    font-size: 2.4rem;
+    font-weight: 700;
+    color: var(--text-primary);
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    opacity: 0;
+    transform: translateY(15px);
+    transition: opacity 0.5s ease 0.3s, transform 0.5s ease 0.3s;
+}
+
+.region-transition-level {
+    font-family: var(--font-mono);
+    font-size: 0.85rem;
+    color: var(--text-muted);
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    opacity: 0;
+    transition: opacity 0.5s ease 0.5s;
+}
+
+.region-transition.active .region-transition-name,
+.region-transition.active .region-transition-level {
+    opacity: 1;
+    transform: translateY(0);
 }
 
 /* ---- Auto-Save Indicator ---- */
@@ -2425,43 +2458,24 @@ body::before {
     font-size: 0.8rem;
 }
 
-/* ---- Collapsible Sidebar Sections ---- */
-.hud-section-title {
-    cursor: pointer;
-    user-select: none;
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-}
-
-.hud-section-title::after {
-    content: '\f078';
-    font-family: 'Font Awesome 6 Free';
-    font-weight: 900;
-    font-size: 0.55rem;
-    color: var(--text-muted);
-    transition: transform 0.25s ease;
-    opacity: 0.5;
-}
-
-.hud-section.collapsed .hud-section-title::after {
-    transform: rotate(-90deg);
-}
-
-.hud-section-body {
-    overflow: hidden;
-    max-height: 500px;
-    transition: max-height 0.35s ease, opacity 0.25s ease;
-    opacity: 1;
-}
-
-.hud-section.collapsed .hud-section-body {
-    max-height: 0;
-    opacity: 0;
-}
-
 /* ---- Narrative Scroll Fade ---- */
 .narrative-container {
     -webkit-mask-image: linear-gradient(to bottom, transparent 0%, black 50px, black 100%);
     mask-image: linear-gradient(to bottom, transparent 0%, black 50px, black 100%);
+}
+
+/* ---- Message Avatars ---- */
+.message-sender {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.message-avatar {
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    object-fit: cover;
+    border: 1px solid var(--border-subtle);
+    flex-shrink: 0;
 }

@@ -1,7 +1,7 @@
 // ============================================================
-// THE SHIMMERING WASTES — UI Controller v2.2
-// Typewriter effect, tooltips, quick-use bar, turn indicator,
-// collapsible sections, notification badges, auto-save, glow
+// THE SHIMMERING WASTES — UI Controller v2.3
+// Typewriter, tooltips (fixed persistence), NPC avatars,
+// quick-use bar, turn indicator, region transitions, glow
 // ============================================================
 
 const UI = (() => {
@@ -11,6 +11,14 @@ const UI = (() => {
     // ---- Previous state for change detection ----
     let prevState = null;
     let typewriterActive = false;
+
+    // ---- NPC Avatar URLs (DiceBear pixel-art) ----
+    const AVATARS = {
+        narrator: "https://api.dicebear.com/9.x/bottts-neutral/svg?seed=oracle&backgroundColor=0a0a0a&eyes=bulging&mouth=smile01",
+        silas: "https://api.dicebear.com/9.x/adventurer/svg?seed=silas&backgroundColor=1a1a2e&hair=short04&skinColor=f2d3b1",
+        elara: "https://api.dicebear.com/9.x/adventurer/svg?seed=elara&backgroundColor=1a1a2e&hair=long19&skinColor=ecad80&hairColor=c18e5a",
+        player: "https://api.dicebear.com/9.x/adventurer/svg?seed=scrapper&backgroundColor=1a1a2e&hair=short11&skinColor=d08b5b"
+    };
 
     function cacheDom() {
         dom.hpFill = document.getElementById("hp-fill");
@@ -56,6 +64,8 @@ const UI = (() => {
         dom.turnIndicatorText = document.getElementById("turn-indicator-text");
         dom.quickUseBar = document.getElementById("quick-use-bar");
         dom.regionTransition = document.getElementById("region-transition");
+        dom.regionTransitionName = document.getElementById("region-transition-name");
+        dom.regionTransitionLevel = document.getElementById("region-transition-level");
         dom.autoSaveIndicator = document.getElementById("auto-save-indicator");
 
         // Modals
@@ -66,58 +76,43 @@ const UI = (() => {
 
     // ---- Update HUD with change detection ----
     function updateHUD(state) {
-        // HP Bar
         const hpPercent = (state.hp / state.maxHp) * 100;
         dom.hpFill.style.width = hpPercent + "%";
         dom.hpValue.textContent = `${state.hp}/${state.maxHp}`;
 
-        // HP critical warning (below 25%)
         const hpGroup = document.querySelector(".bar-hp");
         hpGroup.classList.toggle("critical", hpPercent <= 25 && state.hp > 0);
 
-        // MP Bar
         const mpPercent = (state.mp / state.maxMp) * 100;
         dom.mpFill.style.width = mpPercent + "%";
         dom.mpValue.textContent = `${state.mp}/${state.maxMp}`;
 
-        // EXP Bar
         const expPercent = (state.exp / state.expToLevel) * 100;
         dom.expFill.style.width = expPercent + "%";
         dom.expValue.textContent = `${state.exp}/${state.expToLevel}`;
         dom.levelBadge.textContent = `Lv. ${state.level}`;
 
-        // Stats — with change flash animation
         updateStatWithFlash(dom.statStr, state.str);
         updateStatWithFlash(dom.statDef, state.def);
         updateStatWithFlash(dom.statInt, state.int);
         updateStatWithFlash(dom.statAgi, state.agi);
 
-        // Economy — with change flash
         if (prevState && prevState.coins !== state.coins) {
             dom.coins.classList.add("stat-changed");
             setTimeout(() => dom.coins.classList.remove("stat-changed"), 600);
         }
         dom.coins.textContent = state.coins;
 
-        // Time
         dom.dayCounter.textContent = `Day ${state.day}`;
         dom.timePhases.forEach((el, i) => {
             el.classList.toggle("active", i === state.timePhase);
         });
 
-        // Combat mode
         dom.gameContainer.classList.toggle("combat-mode", state.combatActive);
-
-        // Notification badge on stats button
         updateStatsBadge(state.statPoints);
-
-        // Quick-use bar
         updateQuickUseBar(state);
-
-        // Auto-save
         triggerAutoSave();
 
-        // Save previous state for change detection
         prevState = { ...state };
     }
 
@@ -134,7 +129,6 @@ const UI = (() => {
     function updateStatsBadge(statPoints) {
         const btn = document.getElementById("btn-stats");
         let badge = btn.querySelector(".notification-badge");
-
         if (statPoints > 0) {
             if (!badge) {
                 badge = document.createElement("span");
@@ -157,45 +151,68 @@ const UI = (() => {
         dom.locationLevel.textContent = region.levelRange;
     }
 
-    // ---- Region Transition Effect ----
-    function playRegionTransition(callback) {
+    // ---- Region Transition Effect (with location message, 1.5s) ----
+    function playRegionTransition(regionName, regionLevel, callback) {
+        dom.regionTransitionName.textContent = regionName || "Unknown Region";
+        dom.regionTransitionLevel.textContent = regionLevel || "";
         dom.regionTransition.classList.add("active");
+
+        // Hold for 1.5s to let player read
         setTimeout(() => {
             if (callback) callback();
+            // Fade out after callback
             setTimeout(() => {
                 dom.regionTransition.classList.remove("active");
-            }, 300);
-        }, 400);
+            }, 400);
+        }, 1500);
     }
 
-    // ---- Narrative Messages with Typewriter ----
-    function addNarrative(html, type) {
+    // ---- Detect speaker type from narrative content ----
+    function detectSpeaker(html) {
+        if (!html) return "narrator";
+        const lower = html.toLowerCase();
+        if (lower.includes("silas") && (lower.includes('"') || lower.includes("&quot;") || lower.includes("<em>"))) {
+            return "silas";
+        }
+        if (lower.includes("elara") && (lower.includes('"') || lower.includes("&quot;") || lower.includes("<em>"))) {
+            return "elara";
+        }
+        return "narrator";
+    }
+
+    // ---- Narrative Messages with Typewriter + Avatars ----
+    function addNarrative(html, type, speaker) {
         const msgDiv = document.createElement("div");
         msgDiv.className = `narrative-message message-${type === "gm" ? "gm" : "player"} message-new`;
 
-        const sender = type === "gm"
-            ? `<div class="message-sender"><i class="fa-solid fa-scroll"></i> The Wastes</div>`
-            : `<div class="message-sender">You</div>`;
+        // Determine avatar
+        let avatarKey = type === "gm" ? (speaker || detectSpeaker(html)) : "player";
+        const avatarUrl = AVATARS[avatarKey] || AVATARS.narrator;
+        const senderName = type === "gm" ? "The Wastes" : "You";
+        const senderIcon = type === "gm" ? "fa-scroll" : "";
+
+        const senderDiv = document.createElement("div");
+        senderDiv.className = "message-sender";
+        senderDiv.innerHTML = `
+            <img class="message-avatar" src="${avatarUrl}" alt="${senderName}" loading="lazy">
+            ${senderIcon ? `<i class="fa-solid ${senderIcon}"></i>` : ""} ${senderName}
+        `;
 
         const contentDiv = document.createElement("div");
         contentDiv.className = "message-content";
 
-        msgDiv.innerHTML = sender;
+        msgDiv.appendChild(senderDiv);
         msgDiv.appendChild(contentDiv);
         dom.narrativeContainer.appendChild(msgDiv);
 
-        // Remove new-message glow after animation
         setTimeout(() => msgDiv.classList.remove("message-new"), 1500);
 
         if (type === "gm" && html.length < 800) {
-            // Typewriter effect for GM messages
             typewriteHTML(contentDiv, html);
         } else {
-            // Instant for player or very long text
             contentDiv.innerHTML = html;
         }
 
-        // Scroll to bottom
         requestAnimationFrame(() => {
             dom.narrativeContainer.scrollTop = dom.narrativeContainer.scrollHeight;
         });
@@ -206,35 +223,27 @@ const UI = (() => {
         typewriterActive = true;
         container.innerHTML = '';
 
-        // Create a cursor
         const cursor = document.createElement("span");
         cursor.className = "typewriter-cursor";
 
-        // Parse into temp element to get text nodes
         const temp = document.createElement("div");
         temp.innerHTML = html;
         const fullText = temp.textContent || temp.innerText;
 
-        // Type visible text, then swap in full HTML at end
         let index = 0;
-        const speed = 18; // ms per character
+        const speed = 18;
 
         function typeNext() {
             if (index < fullText.length) {
                 container.textContent = fullText.substring(0, index + 1);
                 container.appendChild(cursor);
                 index++;
-
-                // Scroll during typing
                 dom.narrativeContainer.scrollTop = dom.narrativeContainer.scrollHeight;
                 setTimeout(typeNext, speed);
             } else {
-                // Done — swap in full rich HTML
                 cursor.remove();
                 container.innerHTML = html;
                 typewriterActive = false;
-
-                // Final scroll
                 dom.narrativeContainer.scrollTop = dom.narrativeContainer.scrollHeight;
             }
         }
@@ -252,7 +261,6 @@ const UI = (() => {
             btn.className = "choice-btn";
             btn.dataset.choice = choice.id;
 
-            // Add combat variant classes
             if (choice.id.includes("attack") || choice.id.includes("finish")) {
                 btn.classList.add("combat-attack");
             } else if (choice.id.includes("magic")) {
@@ -289,18 +297,21 @@ const UI = (() => {
         });
     }
 
-    // ---- Subtle Button Glow (replaces ripple) ----
+    // ---- Subtle Button Glow ----
     function triggerButtonGlow(element) {
         element.classList.remove("btn-click-glow");
-        void element.offsetWidth; // force reflow
+        void element.offsetWidth;
         element.classList.add("btn-click-glow");
         setTimeout(() => element.classList.remove("btn-click-glow"), 350);
     }
 
     // ---- Combat Turn Indicator ----
     function showTurnIndicator(isPlayerTurn) {
+        // Force re-animation by removing and re-adding
+        dom.turnIndicator.classList.remove("active", "player-turn", "enemy-turn");
+        void dom.turnIndicator.offsetWidth;
+
         dom.turnIndicator.classList.add("active");
-        dom.turnIndicator.classList.remove("player-turn", "enemy-turn");
         dom.turnIndicator.classList.add(isPlayerTurn ? "player-turn" : "enemy-turn");
 
         const icon = dom.turnIndicator.querySelector("i");
@@ -317,7 +328,6 @@ const UI = (() => {
     // ---- Quick-Use Consumable Bar ----
     function updateQuickUseBar(state) {
         const bar = dom.quickUseBar;
-        // Clear items (keep label)
         const existingItems = bar.querySelectorAll(".quick-use-item");
         existingItems.forEach(el => el.remove());
 
@@ -348,12 +358,9 @@ const UI = (() => {
                 GameEngine.useItem(slot.id);
             });
 
-            // Tooltip
-            el.addEventListener("mouseenter", (e) => {
-                showGameTooltip(item, e);
-            });
-            el.addEventListener("mouseleave", hideGameTooltip);
-            el.addEventListener("mousemove", moveGameTooltip);
+            el.addEventListener("pointerenter", (e) => showGameTooltip(item, e));
+            el.addEventListener("pointerleave", hideGameTooltip);
+            el.addEventListener("pointermove", moveGameTooltip);
 
             bar.appendChild(el);
         });
@@ -365,7 +372,10 @@ const UI = (() => {
         indicator.className = "narrative-message message-gm";
         indicator.id = "typing-indicator";
         indicator.innerHTML = `
-            <div class="message-sender"><i class="fa-solid fa-scroll"></i> The Wastes</div>
+            <div class="message-sender">
+                <img class="message-avatar" src="${AVATARS.narrator}" alt="Narrator" loading="lazy">
+                <i class="fa-solid fa-scroll"></i> The Wastes
+            </div>
             <div class="typing-indicator">
                 <div class="typing-dot"></div>
                 <div class="typing-dot"></div>
@@ -523,9 +533,9 @@ const UI = (() => {
                 ${slot.qty > 1 ? `<div class="inventory-slot-qty">x${slot.qty}</div>` : ""}
             `;
 
-            div.addEventListener("mouseenter", (e) => showGameTooltip(item, e));
-            div.addEventListener("mouseleave", hideGameTooltip);
-            div.addEventListener("mousemove", moveGameTooltip);
+            div.addEventListener("pointerenter", (e) => showGameTooltip(item, e));
+            div.addEventListener("pointerleave", hideGameTooltip);
+            div.addEventListener("pointermove", moveGameTooltip);
 
             if (item.type === "consumable") {
                 div.addEventListener("click", () => {
@@ -547,8 +557,9 @@ const UI = (() => {
         }
     }
 
-    // ---- Game Tooltip System ----
+    // ---- Game Tooltip System (FIXED persistence bug) ----
     let activeTooltip = null;
+    let tooltipCleanupInterval = null;
 
     function showGameTooltip(item, event) {
         hideGameTooltip();
@@ -581,6 +592,10 @@ const UI = (() => {
         document.body.appendChild(tip);
         activeTooltip = tip;
         positionTooltip(event.clientX, event.clientY);
+
+        // Safety: auto-hide after 5s if still around
+        clearTimeout(tooltipCleanupInterval);
+        tooltipCleanupInterval = setTimeout(() => hideGameTooltip(), 5000);
     }
 
     function moveGameTooltip(event) {
@@ -602,9 +617,10 @@ const UI = (() => {
     }
 
     function hideGameTooltip() {
-        const existing = document.getElementById("active-game-tooltip");
-        if (existing) existing.remove();
+        // Remove ALL tooltip elements (belt-and-suspenders approach)
+        document.querySelectorAll(".game-tooltip").forEach(el => el.remove());
         activeTooltip = null;
+        clearTimeout(tooltipCleanupInterval);
     }
 
     // ---- HUD Stat Tooltips ----
@@ -625,8 +641,7 @@ const UI = (() => {
             });
 
             if (statKey) {
-                item.dataset.tooltip = "true";
-                item.addEventListener("mouseenter", (e) => {
+                item.addEventListener("pointerenter", (e) => {
                     const info = descriptions[statKey];
                     const tip = document.createElement("div");
                     tip.className = "game-tooltip";
@@ -638,41 +653,19 @@ const UI = (() => {
                     document.body.appendChild(tip);
                     activeTooltip = tip;
                     positionTooltip(e.clientX, e.clientY);
+
+                    clearTimeout(tooltipCleanupInterval);
+                    tooltipCleanupInterval = setTimeout(() => hideGameTooltip(), 5000);
                 });
-                item.addEventListener("mouseleave", hideGameTooltip);
-                item.addEventListener("mousemove", moveGameTooltip);
+                item.addEventListener("pointerleave", hideGameTooltip);
+                item.addEventListener("pointermove", moveGameTooltip);
             }
-        });
-    }
-
-    // ---- Collapsible Sidebar Sections ----
-    function initCollapsibleSections() {
-        const sections = document.querySelectorAll(".hud-section[data-section]");
-        const saved = JSON.parse(localStorage.getItem("tsw_collapsed") || "{}");
-
-        sections.forEach(section => {
-            const key = section.dataset.section;
-            const title = section.querySelector(".hud-section-title");
-
-            // Restore saved state
-            if (saved[key]) {
-                section.classList.add("collapsed");
-            }
-
-            title.addEventListener("click", () => {
-                section.classList.toggle("collapsed");
-                // Save state
-                const current = JSON.parse(localStorage.getItem("tsw_collapsed") || "{}");
-                current[key] = section.classList.contains("collapsed");
-                localStorage.setItem("tsw_collapsed", JSON.stringify(current));
-            });
         });
     }
 
     // ---- Auto-Save Indicator ----
     let autoSaveTimeout = null;
     function triggerAutoSave() {
-        // Show the indicator briefly
         dom.autoSaveIndicator.classList.add("visible");
         clearTimeout(autoSaveTimeout);
         autoSaveTimeout = setTimeout(() => {
@@ -796,6 +789,29 @@ const UI = (() => {
         });
     }
 
+    // ---- Global tooltip cleanup (fixes persistence bug) ----
+    function initGlobalTooltipCleanup() {
+        // If mouse moves and isn't over a tooltip-enabled element, hide tooltip
+        document.addEventListener("pointermove", (e) => {
+            if (!activeTooltip) return;
+            const target = e.target;
+            // Check if we're over a tooltip-source element
+            const isOverTooltipSource = target.closest(".stat-item, .inventory-slot, .quick-use-item, .game-tooltip");
+            if (!isOverTooltipSource) {
+                hideGameTooltip();
+            }
+        });
+
+        // Hide tooltip on any scroll
+        document.addEventListener("scroll", hideGameTooltip, true);
+
+        // Hide tooltip on click anywhere
+        document.addEventListener("click", () => {
+            // Small delay to let click handlers process first
+            setTimeout(hideGameTooltip, 50);
+        });
+    }
+
     // ---- Utility ----
     function hexToRgba(hex, alpha) {
         const r = parseInt(hex.slice(1, 3), 16);
@@ -808,7 +824,6 @@ const UI = (() => {
     function init() {
         cacheDom();
 
-        // Custom input handler
         dom.sendBtn.addEventListener("click", () => {
             const text = dom.customInput.value;
             dom.customInput.value = "";
@@ -819,7 +834,6 @@ const UI = (() => {
             if (e.key === "Enter") dom.sendBtn.click();
         });
 
-        // Stat allocation buttons
         document.querySelectorAll(".stat-upgrade-btn").forEach(btn => {
             btn.addEventListener("click", () => {
                 triggerButtonGlow(btn);
@@ -827,13 +841,11 @@ const UI = (() => {
             });
         });
 
-        // Level up dismiss
         document.getElementById("level-up-dismiss").addEventListener("click", () => {
             hideLevelUpOverlay();
             openStatsModal();
         });
 
-        // HUD buttons — with glow
         document.querySelectorAll(".hud-btn").forEach(btn => {
             btn.addEventListener("click", () => triggerButtonGlow(btn));
         });
@@ -848,10 +860,9 @@ const UI = (() => {
             showToast("Settings coming soon!", "warning", "fa-gear");
         });
 
-        // Init systems
         initKeyboardShortcuts();
         initStatTooltips();
-        initCollapsibleSections();
+        initGlobalTooltipCleanup();
     }
 
     // ---- Public API ----

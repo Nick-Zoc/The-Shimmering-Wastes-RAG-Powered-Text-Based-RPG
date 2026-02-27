@@ -1,7 +1,8 @@
 // ============================================================
-// THE SHIMMERING WASTES — Mock Game Engine v2.2
+// THE SHIMMERING WASTES — Mock Game Engine v2.3
 // State management, game logic, time-of-day theming,
-// particle effects, save system, region transitions
+// particle effects, save system, enemy turn combat flow,
+// sell system, region transitions with location text
 // ============================================================
 
 const GameEngine = (() => {
@@ -37,6 +38,9 @@ const GameEngine = (() => {
         gameStarted: false
     };
 
+    // Track previous region for transitions
+    let previousRegion = "last_bastion";
+
     // ---- Initialize ----
     function init() {
         state.gameStarted = true;
@@ -55,11 +59,33 @@ const GameEngine = (() => {
         }, 800);
     }
 
+    // ---- Determine if this is a real region change ----
+    function getTargetRegion(updates) {
+        if (updates.combat_active && updates.current_enemy) {
+            const enemy = ENEMIES[updates.current_enemy];
+            if (enemy) {
+                return enemy.region === "Ash Plains" ? "ash_plains" :
+                    enemy.region === "Crystal Forest" ? "crystal_forest" :
+                        "colossus_crater";
+            }
+        }
+        if (updates.combat_active === false && !state.combatActive) {
+            return "last_bastion";
+        }
+        return null;
+    }
+
     // ---- Process a Choice ----
     function processChoice(choiceId) {
         const scenario = MOCK_SCENARIOS[choiceId];
         if (!scenario) {
             UI.addNarrative("<em>The Wastes offer no response to that action... Try something else.</em>", "gm");
+            return;
+        }
+
+        // Handle sell actions
+        if (choiceId.startsWith("sell_")) {
+            handleSellAction(choiceId);
             return;
         }
 
@@ -80,44 +106,104 @@ const GameEngine = (() => {
         setTimeout(() => {
             UI.hideTypingIndicator();
 
-            // Apply state updates
-            if (scenario.stateUpdates) {
-                // Region transition for combat/area changes
-                const isRegionChange = scenario.stateUpdates.combat_active === true ||
-                    scenario.stateUpdates.combat_active === false;
+            // Determine if we need a region transition
+            let needsTransition = false;
+            let transitionRegionKey = null;
 
-                if (isRegionChange) {
-                    UI.playRegionTransition(() => {
-                        applyStateUpdates(scenario.stateUpdates);
-                        UI.addNarrative(scenario.narrative, "gm");
-                    });
-                } else {
+            if (scenario.stateUpdates) {
+                transitionRegionKey = getTargetRegion(scenario.stateUpdates);
+                if (transitionRegionKey && transitionRegionKey !== state.currentRegion) {
+                    needsTransition = true;
+                }
+
+                // Also transition when leaving combat (returning to bastion)
+                if (scenario.stateUpdates.combat_active === false && state.combatActive) {
+                    const returnRegion = "last_bastion";
+                    if (returnRegion !== state.currentRegion) {
+                        needsTransition = true;
+                        transitionRegionKey = returnRegion;
+                    }
+                }
+            }
+
+            if (needsTransition && transitionRegionKey) {
+                const targetRegion = REGIONS[transitionRegionKey];
+                UI.playRegionTransition(targetRegion.name, targetRegion.levelRange, () => {
                     applyStateUpdates(scenario.stateUpdates);
                     UI.addNarrative(scenario.narrative, "gm");
-                }
+                });
             } else {
+                if (scenario.stateUpdates) {
+                    applyStateUpdates(scenario.stateUpdates);
+                }
                 UI.addNarrative(scenario.narrative, "gm");
             }
 
-            // Show new choices
-            setTimeout(() => {
-                if (scenario.choices) {
-                    UI.showChoices(scenario.choices);
+            // Determine if this is a combat attack that needs enemy turn
+            const isCombatAttack = scenario.stateUpdates &&
+                scenario.stateUpdates.combat_active === true &&
+                scenario.stateUpdates.hp_change &&
+                scenario.stateUpdates.hp_change < 0;
 
-                    // Show turn indicator during combat
-                    if (state.combatActive) {
-                        UI.showTurnIndicator(true);
-                    } else {
-                        UI.hideTurnIndicator();
+            if (isCombatAttack && state.combatActive) {
+                // Two-phase combat: player attack → enemy turn → your turn
+                showPlayerTurnThenEnemyTurn(scenario);
+            } else if (scenario.triggerSellMenu) {
+                // Sell menu: show dynamic sell choices
+                setTimeout(() => showSellChoices(), 600);
+            } else {
+                // Normal flow: show choices
+                const choiceDelay = needsTransition ? 2000 : 400;
+                setTimeout(() => {
+                    if (scenario.choices) {
+                        UI.showChoices(scenario.choices);
+
+                        if (state.combatActive) {
+                            UI.showTurnIndicator(true);
+                        } else {
+                            UI.hideTurnIndicator();
+                        }
                     }
-                }
-            }, 400);
+                }, choiceDelay);
+            }
 
             // Open stats if flagged
             if (scenario.stateUpdates && scenario.stateUpdates.openStats) {
                 setTimeout(() => UI.openStatsModal(), 600);
             }
         }, delay);
+    }
+
+    // ---- Two-Phase Combat Turn ----
+    function showPlayerTurnThenEnemyTurn(scenario) {
+        // Phase 1: Show "Your Turn" briefly with player attack result
+        UI.showTurnIndicator(true);
+
+        // Phase 2: After 1.2s, switch to "Enemy's Turn"
+        setTimeout(() => {
+            UI.showTurnIndicator(false); // Enemy's Turn
+
+            // Show enemy counter-attack narrative
+            setTimeout(() => {
+                const enemy = ENEMIES[state.currentEnemy];
+                if (enemy) {
+                    const enemyDamage = Math.abs(scenario.stateUpdates.hp_change);
+                    UI.addNarrative(
+                        `The <strong>${enemy.name}</strong> retaliates — lunging at you for <strong class="text-danger">${enemyDamage} damage</strong>! ` +
+                        `<span class="enemy-status">${enemy.name} HP: ${state.currentEnemyHp}/${enemy.maxHp}</span>`,
+                        "gm"
+                    );
+                }
+
+                // Phase 3: After 1s, back to "Your Turn" with choices
+                setTimeout(() => {
+                    if (scenario.choices) {
+                        UI.showTurnIndicator(true); // Your Turn
+                        UI.showChoices(scenario.choices);
+                    }
+                }, 1000);
+            }, 800);
+        }, 1200);
     }
 
     // ---- Apply state updates from scenario ----
@@ -340,6 +426,60 @@ It is now <strong>Morning of Day ${state.day}</strong>.`, "gm");
         return true;
     }
 
+    // ---- Sell Item ----
+    function handleSellAction(choiceId) {
+        const itemId = choiceId.replace("sell_", "");
+        const slot = state.inventory.find(i => i.id === itemId);
+        const item = ITEMS[itemId];
+
+        if (!slot || slot.qty <= 0 || !item || !item.sellPrice) {
+            UI.addNarrative("<em>You don't have that item to sell.</em>", "gm", "silas");
+            return;
+        }
+
+        // Random sell price within range
+        const price = Math.floor(Math.random() * (item.sellPrice.max - item.sellPrice.min + 1)) + item.sellPrice.min;
+        state.coins += price;
+
+        slot.qty--;
+        if (slot.qty <= 0) {
+            state.inventory = state.inventory.filter(i => i.id !== itemId);
+        }
+
+        UI.addNarrative(`Silas takes the <strong>${item.name}</strong> and inspects it. <em>"Not bad. I'll give you <strong>${price} coins</strong> for this."</em> He drops the coins into your hand.`, "gm", "silas");
+        UI.showToast(`+${price} Coins`, "success", "fa-coins");
+        UI.showFloatingNumber(`+${price}`, "coins");
+
+        UI.updateHUD(state);
+
+        // Show sell menu again after a brief pause
+        setTimeout(() => {
+            showSellChoices();
+        }, 500);
+    }
+
+    function showSellChoices() {
+        const sellableItems = state.inventory.filter(slot => {
+            const item = ITEMS[slot.id];
+            return item && item.sellPrice && slot.qty > 0;
+        });
+
+        const choices = [];
+
+        sellableItems.forEach(slot => {
+            const item = ITEMS[slot.id];
+            choices.push({
+                id: `sell_${slot.id}`,
+                text: `Sell ${item.name} (${item.sellPrice.min}-${item.sellPrice.max} coins) x${slot.qty}`,
+                icon: item.icon
+            });
+        });
+
+        choices.push({ id: "talk_silas", text: "Back to Silas's shop", icon: "fa-arrow-left" });
+
+        UI.showChoices(choices);
+    }
+
     // ---- Stat Allocation ----
     function allocateStat(statName) {
         if (state.statPoints <= 0) return false;
@@ -386,6 +526,10 @@ It is now <strong>Morning of Day ${state.day}</strong>.`, "gm");
                     UI.addNarrative("You open the Healing Potion and drink it down. Warmth flows through your body as your wounds start to close. <strong>+20 HP</strong>", "gm");
                     return;
                 }
+            }
+            if (lower.includes("sell")) {
+                showSellChoices();
+                return;
             }
             if (lower.includes("explore") || lower.includes("look")) {
                 processChoice("explore_bastion");
