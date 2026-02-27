@@ -21,6 +21,14 @@
     <!-- ========== PARTICLE CANVAS ========== -->
     <canvas id="particle-canvas"></canvas>
 
+    <!-- ========== REGION TRANSITION OVERLAY ========== -->
+    <div class="region-transition" id="region-transition"></div>
+
+    <!-- ========== AUTO-SAVE INDICATOR ========== -->
+    <div class="auto-save-indicator" id="auto-save-indicator">
+        <i class="fa-solid fa-floppy-disk"></i> Auto-saved
+    </div>
+
     <!-- ========== GAME CONTAINER ========== -->
     <div class="game-container" id="game-container">
 
@@ -39,140 +47,150 @@
             </div>
 
             <!-- Vitals Section (HP / MP / EXP) -->
-            <div class="hud-section">
+            <div class="hud-section" data-section="vitals">
                 <div class="hud-section-title">Vitals</div>
+                <div class="hud-section-body">
 
-                <!-- HP Bar -->
-                <div class="resource-bar-group bar-hp">
-                    <div class="resource-label">
-                        <span class="resource-label-name"><i class="fa-solid fa-heart"></i> HP</span>
-                        <span class="resource-label-value" id="hp-value">50/50</span>
+                    <!-- HP Bar -->
+                    <div class="resource-bar-group bar-hp">
+                        <div class="resource-label">
+                            <span class="resource-label-name"><i class="fa-solid fa-heart"></i> HP</span>
+                            <span class="resource-label-value" id="hp-value">50/50</span>
+                        </div>
+                        <div class="resource-bar">
+                            <div class="resource-bar-fill" id="hp-fill" style="width: 100%"></div>
+                        </div>
                     </div>
-                    <div class="resource-bar">
-                        <div class="resource-bar-fill" id="hp-fill" style="width: 100%"></div>
-                    </div>
-                </div>
 
-                <!-- MP Bar -->
-                <div class="resource-bar-group bar-mp">
-                    <div class="resource-label">
-                        <span class="resource-label-name"><i class="fa-solid fa-droplet"></i> MP</span>
-                        <span class="resource-label-value" id="mp-value">30/30</span>
+                    <!-- MP Bar -->
+                    <div class="resource-bar-group bar-mp">
+                        <div class="resource-label">
+                            <span class="resource-label-name"><i class="fa-solid fa-droplet"></i> MP</span>
+                            <span class="resource-label-value" id="mp-value">30/30</span>
+                        </div>
+                        <div class="resource-bar">
+                            <div class="resource-bar-fill" id="mp-fill" style="width: 100%"></div>
+                        </div>
                     </div>
-                    <div class="resource-bar">
-                        <div class="resource-bar-fill" id="mp-fill" style="width: 100%"></div>
-                    </div>
-                </div>
 
-                <!-- EXP Bar -->
-                <div class="resource-bar-group bar-exp">
-                    <div class="resource-label">
-                        <span class="resource-label-name"><i class="fa-solid fa-star"></i> EXP</span>
-                        <span class="resource-label-value" id="exp-value">0/100</span>
+                    <!-- EXP Bar -->
+                    <div class="resource-bar-group bar-exp">
+                        <div class="resource-label">
+                            <span class="resource-label-name"><i class="fa-solid fa-star"></i> EXP</span>
+                            <span class="resource-label-value" id="exp-value">0/100</span>
+                        </div>
+                        <div class="resource-bar">
+                            <div class="resource-bar-fill" id="exp-fill" style="width: 0%"></div>
+                        </div>
                     </div>
-                    <div class="resource-bar">
-                        <div class="resource-bar-fill" id="exp-fill" style="width: 0%"></div>
-                    </div>
-                </div>
 
-                <div class="text-center mt-2">
-                    <span class="level-badge" id="level-badge">Lv. 1</span>
+                    <div class="text-center mt-2">
+                        <span class="level-badge" id="level-badge">Lv. 1</span>
+                    </div>
                 </div>
             </div>
 
             <!-- Attributes Section -->
-            <div class="hud-section">
+            <div class="hud-section" data-section="attributes">
                 <div class="hud-section-title">Attributes</div>
-                <div class="stats-grid">
-                    <div class="stat-item">
-                        <div class="stat-icon str"><i class="fa-solid fa-fist-raised"></i></div>
-                        <div class="stat-info">
-                            <span class="stat-name">STR</span>
-                            <span class="stat-value" id="stat-str">5</span>
+                <div class="hud-section-body">
+                    <div class="stats-grid">
+                        <div class="stat-item">
+                            <div class="stat-icon str"><i class="fa-solid fa-fist-raised"></i></div>
+                            <div class="stat-info">
+                                <span class="stat-name">STR</span>
+                                <span class="stat-value" id="stat-str">5</span>
+                            </div>
                         </div>
-                    </div>
-                    <div class="stat-item">
-                        <div class="stat-icon def"><i class="fa-solid fa-shield-halved"></i></div>
-                        <div class="stat-info">
-                            <span class="stat-name">DEF</span>
-                            <span class="stat-value" id="stat-def">3</span>
+                        <div class="stat-item">
+                            <div class="stat-icon def"><i class="fa-solid fa-shield-halved"></i></div>
+                            <div class="stat-info">
+                                <span class="stat-name">DEF</span>
+                                <span class="stat-value" id="stat-def">3</span>
+                            </div>
                         </div>
-                    </div>
-                    <div class="stat-item">
-                        <div class="stat-icon int"><i class="fa-solid fa-book-open"></i></div>
-                        <div class="stat-info">
-                            <span class="stat-name">INT</span>
-                            <span class="stat-value" id="stat-int">4</span>
+                        <div class="stat-item">
+                            <div class="stat-icon int"><i class="fa-solid fa-book-open"></i></div>
+                            <div class="stat-info">
+                                <span class="stat-name">INT</span>
+                                <span class="stat-value" id="stat-int">4</span>
+                            </div>
                         </div>
-                    </div>
-                    <div class="stat-item">
-                        <div class="stat-icon agi"><i class="fa-solid fa-bolt"></i></div>
-                        <div class="stat-info">
-                            <span class="stat-name">AGI</span>
-                            <span class="stat-value" id="stat-agi">4</span>
+                        <div class="stat-item">
+                            <div class="stat-icon agi"><i class="fa-solid fa-bolt"></i></div>
+                            <div class="stat-info">
+                                <span class="stat-name">AGI</span>
+                                <span class="stat-value" id="stat-agi">4</span>
+                            </div>
                         </div>
                     </div>
                 </div>
             </div>
 
             <!-- Status Section (Coins, Day) -->
-            <div class="hud-section">
+            <div class="hud-section" data-section="status">
                 <div class="hud-section-title">Status</div>
-                <div class="info-row">
-                    <div class="info-row-label">
-                        <i class="fa-solid fa-coins" style="color: var(--gold)"></i> Coins
+                <div class="hud-section-body">
+                    <div class="info-row">
+                        <div class="info-row-label">
+                            <i class="fa-solid fa-coins" style="color: var(--gold)"></i> Coins
+                        </div>
+                        <div class="info-row-value" id="coins-value" style="color: var(--gold)">30</div>
                     </div>
-                    <div class="info-row-value" id="coins-value" style="color: var(--gold)">30</div>
-                </div>
-                <div class="info-row">
-                    <div class="info-row-label">
-                        <i class="fa-solid fa-calendar-days" style="color: var(--teal)"></i> Day
+                    <div class="info-row">
+                        <div class="info-row-label">
+                            <i class="fa-solid fa-calendar-days" style="color: var(--teal)"></i> Day
+                        </div>
+                        <div class="info-row-value" id="day-counter" style="color: var(--teal)">Day 1</div>
                     </div>
-                    <div class="info-row-value" id="day-counter" style="color: var(--teal)">Day 1</div>
                 </div>
             </div>
 
             <!-- Time of Day -->
-            <div class="hud-section">
+            <div class="hud-section" data-section="time">
                 <div class="hud-section-title">Time of Day</div>
-                <div class="time-cycle">
-                    <div class="time-phase active" data-phase="0">
-                        <i class="fa-solid fa-sun" style="color: #ffd700"></i>
-                        <span class="time-phase-label">Morn</span>
-                    </div>
-                    <div class="time-phase" data-phase="1">
-                        <i class="fa-solid fa-cloud-sun" style="color: #ff9500"></i>
-                        <span class="time-phase-label">Noon</span>
-                    </div>
-                    <div class="time-phase" data-phase="2">
-                        <i class="fa-solid fa-cloud-moon" style="color: #e65c00"></i>
-                        <span class="time-phase-label">Eve</span>
-                    </div>
-                    <div class="time-phase" data-phase="3">
-                        <i class="fa-solid fa-moon" style="color: #6366f1"></i>
-                        <span class="time-phase-label">Night</span>
+                <div class="hud-section-body">
+                    <div class="time-cycle">
+                        <div class="time-phase active" data-phase="0">
+                            <i class="fa-solid fa-sun" style="color: #ffd700"></i>
+                            <span class="time-phase-label">Morn</span>
+                        </div>
+                        <div class="time-phase" data-phase="1">
+                            <i class="fa-solid fa-cloud-sun" style="color: #ff9500"></i>
+                            <span class="time-phase-label">Noon</span>
+                        </div>
+                        <div class="time-phase" data-phase="2">
+                            <i class="fa-solid fa-cloud-moon" style="color: #e65c00"></i>
+                            <span class="time-phase-label">Eve</span>
+                        </div>
+                        <div class="time-phase" data-phase="3">
+                            <i class="fa-solid fa-moon" style="color: #6366f1"></i>
+                            <span class="time-phase-label">Night</span>
+                        </div>
                     </div>
                 </div>
             </div>
 
             <!-- Menu Buttons -->
-            <div class="hud-section">
+            <div class="hud-section" data-section="menu">
                 <div class="hud-section-title">Menu</div>
-                <button class="hud-btn" id="btn-stats">
-                    <i class="fa-solid fa-chart-bar"></i> Stats <span class="kbd-hint">S</span>
-                </button>
-                <button class="hud-btn" id="btn-inventory">
-                    <i class="fa-solid fa-briefcase"></i> Inventory <span class="kbd-hint">I</span>
-                </button>
-                <button class="hud-btn" id="btn-save">
-                    <i class="fa-solid fa-floppy-disk"></i> Save / Load <span class="kbd-hint">F</span>
-                </button>
-                <button class="hud-btn" id="btn-map">
-                    <i class="fa-solid fa-map-location-dot"></i> Map
-                </button>
-                <button class="hud-btn" id="btn-settings">
-                    <i class="fa-solid fa-gear"></i> Settings
-                </button>
+                <div class="hud-section-body">
+                    <button class="hud-btn" id="btn-stats">
+                        <i class="fa-solid fa-chart-bar"></i> Stats <span class="kbd-hint">S</span>
+                    </button>
+                    <button class="hud-btn" id="btn-inventory">
+                        <i class="fa-solid fa-briefcase"></i> Inventory <span class="kbd-hint">I</span>
+                    </button>
+                    <button class="hud-btn" id="btn-save">
+                        <i class="fa-solid fa-floppy-disk"></i> Save / Load <span class="kbd-hint">F</span>
+                    </button>
+                    <button class="hud-btn" id="btn-map">
+                        <i class="fa-solid fa-map-location-dot"></i> Map
+                    </button>
+                    <button class="hud-btn" id="btn-settings">
+                        <i class="fa-solid fa-gear"></i> Settings
+                    </button>
+                </div>
             </div>
 
         </aside>
@@ -227,6 +245,18 @@
 
             <!-- Action Panel (Choices + Input) -->
             <div class="action-panel">
+                <!-- Turn Indicator (visible during combat) -->
+                <div class="turn-indicator" id="turn-indicator">
+                    <i class="fa-solid fa-sword"></i>
+                    <span id="turn-indicator-text">Your Turn</span>
+                </div>
+
+                <!-- Quick-Use Consumable Bar -->
+                <div class="quick-use-bar" id="quick-use-bar">
+                    <span class="quick-use-label">Quick Use:</span>
+                    <!-- Items rendered by JS -->
+                </div>
+
                 <div class="choices-container" id="choices-container">
                     <!-- Choice buttons rendered here by JS -->
                 </div>

@@ -1,7 +1,7 @@
 // ============================================================
-// THE SHIMMERING WASTES — UI Controller v2.1
-// DOM manipulation, animations, interactive enhancements
-// Floating numbers, screen shake, tooltips, ripples, shortcuts
+// THE SHIMMERING WASTES — UI Controller v2.2
+// Typewriter effect, tooltips, quick-use bar, turn indicator,
+// collapsible sections, notification badges, auto-save, glow
 // ============================================================
 
 const UI = (() => {
@@ -10,6 +10,7 @@ const UI = (() => {
 
     // ---- Previous state for change detection ----
     let prevState = null;
+    let typewriterActive = false;
 
     function cacheDom() {
         dom.hpFill = document.getElementById("hp-fill");
@@ -51,6 +52,12 @@ const UI = (() => {
         dom.levelUpOverlay = document.getElementById("level-up-overlay");
         dom.levelUpLevel = document.getElementById("level-up-level");
 
+        dom.turnIndicator = document.getElementById("turn-indicator");
+        dom.turnIndicatorText = document.getElementById("turn-indicator-text");
+        dom.quickUseBar = document.getElementById("quick-use-bar");
+        dom.regionTransition = document.getElementById("region-transition");
+        dom.autoSaveIndicator = document.getElementById("auto-save-indicator");
+
         // Modals
         dom.statsModal = document.getElementById("statsModal");
         dom.inventoryModal = document.getElementById("inventoryModal");
@@ -80,10 +87,10 @@ const UI = (() => {
         dom.levelBadge.textContent = `Lv. ${state.level}`;
 
         // Stats — with change flash animation
-        updateStatWithFlash(dom.statStr, state.str, "str");
-        updateStatWithFlash(dom.statDef, state.def, "def");
-        updateStatWithFlash(dom.statInt, state.int, "int");
-        updateStatWithFlash(dom.statAgi, state.agi, "agi");
+        updateStatWithFlash(dom.statStr, state.str);
+        updateStatWithFlash(dom.statDef, state.def);
+        updateStatWithFlash(dom.statInt, state.int);
+        updateStatWithFlash(dom.statAgi, state.agi);
 
         // Economy — with change flash
         if (prevState && prevState.coins !== state.coins) {
@@ -101,17 +108,43 @@ const UI = (() => {
         // Combat mode
         dom.gameContainer.classList.toggle("combat-mode", state.combatActive);
 
+        // Notification badge on stats button
+        updateStatsBadge(state.statPoints);
+
+        // Quick-use bar
+        updateQuickUseBar(state);
+
+        // Auto-save
+        triggerAutoSave();
+
         // Save previous state for change detection
         prevState = { ...state };
     }
 
-    function updateStatWithFlash(el, newVal, statName) {
+    function updateStatWithFlash(el, newVal) {
         const oldVal = parseInt(el.textContent) || 0;
         if (oldVal !== newVal && prevState) {
             el.classList.add("stat-changed");
             setTimeout(() => el.classList.remove("stat-changed"), 600);
         }
         el.textContent = newVal;
+    }
+
+    // ---- Notification Badge ----
+    function updateStatsBadge(statPoints) {
+        const btn = document.getElementById("btn-stats");
+        let badge = btn.querySelector(".notification-badge");
+
+        if (statPoints > 0) {
+            if (!badge) {
+                badge = document.createElement("span");
+                badge.className = "notification-badge";
+                btn.appendChild(badge);
+            }
+            badge.textContent = statPoints;
+        } else if (badge) {
+            badge.remove();
+        }
     }
 
     // ---- Update Location Banner ----
@@ -124,7 +157,18 @@ const UI = (() => {
         dom.locationLevel.textContent = region.levelRange;
     }
 
-    // ---- Narrative Messages ----
+    // ---- Region Transition Effect ----
+    function playRegionTransition(callback) {
+        dom.regionTransition.classList.add("active");
+        setTimeout(() => {
+            if (callback) callback();
+            setTimeout(() => {
+                dom.regionTransition.classList.remove("active");
+            }, 300);
+        }, 400);
+    }
+
+    // ---- Narrative Messages with Typewriter ----
     function addNarrative(html, type) {
         const msgDiv = document.createElement("div");
         msgDiv.className = `narrative-message message-${type === "gm" ? "gm" : "player"} message-new`;
@@ -133,20 +177,69 @@ const UI = (() => {
             ? `<div class="message-sender"><i class="fa-solid fa-scroll"></i> The Wastes</div>`
             : `<div class="message-sender">You</div>`;
 
-        msgDiv.innerHTML = `
-            ${sender}
-            <div class="message-content">${html}</div>
-        `;
+        const contentDiv = document.createElement("div");
+        contentDiv.className = "message-content";
 
+        msgDiv.innerHTML = sender;
+        msgDiv.appendChild(contentDiv);
         dom.narrativeContainer.appendChild(msgDiv);
 
         // Remove new-message glow after animation
         setTimeout(() => msgDiv.classList.remove("message-new"), 1500);
 
+        if (type === "gm" && html.length < 800) {
+            // Typewriter effect for GM messages
+            typewriteHTML(contentDiv, html);
+        } else {
+            // Instant for player or very long text
+            contentDiv.innerHTML = html;
+        }
+
         // Scroll to bottom
         requestAnimationFrame(() => {
             dom.narrativeContainer.scrollTop = dom.narrativeContainer.scrollHeight;
         });
+    }
+
+    // ---- Typewriter HTML ----
+    function typewriteHTML(container, html) {
+        typewriterActive = true;
+        container.innerHTML = '';
+
+        // Create a cursor
+        const cursor = document.createElement("span");
+        cursor.className = "typewriter-cursor";
+
+        // Parse into temp element to get text nodes
+        const temp = document.createElement("div");
+        temp.innerHTML = html;
+        const fullText = temp.textContent || temp.innerText;
+
+        // Type visible text, then swap in full HTML at end
+        let index = 0;
+        const speed = 18; // ms per character
+
+        function typeNext() {
+            if (index < fullText.length) {
+                container.textContent = fullText.substring(0, index + 1);
+                container.appendChild(cursor);
+                index++;
+
+                // Scroll during typing
+                dom.narrativeContainer.scrollTop = dom.narrativeContainer.scrollHeight;
+                setTimeout(typeNext, speed);
+            } else {
+                // Done — swap in full rich HTML
+                cursor.remove();
+                container.innerHTML = html;
+                typewriterActive = false;
+
+                // Final scroll
+                dom.narrativeContainer.scrollTop = dom.narrativeContainer.scrollHeight;
+            }
+        }
+
+        typeNext();
     }
 
     // ---- Show Choices with keyboard hints ----
@@ -170,7 +263,6 @@ const UI = (() => {
                 btn.classList.add("combat-flee");
             }
 
-            // Add keyboard shortcut hint
             const kbdHint = index < 4 ? `<span class="kbd-hint">${keyMap[index]}</span>` : "";
 
             btn.innerHTML = `
@@ -179,9 +271,8 @@ const UI = (() => {
                 ${kbdHint}
             `;
 
-            // Ripple effect on click
-            btn.addEventListener("click", (e) => {
-                createRipple(e, btn);
+            btn.addEventListener("click", () => {
+                triggerButtonGlow(btn);
                 GameEngine.processChoice(choice.id);
             });
 
@@ -198,17 +289,74 @@ const UI = (() => {
         });
     }
 
-    // ---- Click Ripple Effect ----
-    function createRipple(event, element) {
-        const rect = element.getBoundingClientRect();
-        const ripple = document.createElement("span");
-        ripple.className = "ripple";
-        const size = Math.max(rect.width, rect.height);
-        ripple.style.width = ripple.style.height = size + "px";
-        ripple.style.left = (event.clientX - rect.left - size / 2) + "px";
-        ripple.style.top = (event.clientY - rect.top - size / 2) + "px";
-        element.appendChild(ripple);
-        setTimeout(() => ripple.remove(), 600);
+    // ---- Subtle Button Glow (replaces ripple) ----
+    function triggerButtonGlow(element) {
+        element.classList.remove("btn-click-glow");
+        void element.offsetWidth; // force reflow
+        element.classList.add("btn-click-glow");
+        setTimeout(() => element.classList.remove("btn-click-glow"), 350);
+    }
+
+    // ---- Combat Turn Indicator ----
+    function showTurnIndicator(isPlayerTurn) {
+        dom.turnIndicator.classList.add("active");
+        dom.turnIndicator.classList.remove("player-turn", "enemy-turn");
+        dom.turnIndicator.classList.add(isPlayerTurn ? "player-turn" : "enemy-turn");
+
+        const icon = dom.turnIndicator.querySelector("i");
+        icon.className = isPlayerTurn
+            ? "fa-solid fa-hand-fist"
+            : "fa-solid fa-skull-crossbones";
+        dom.turnIndicatorText.textContent = isPlayerTurn ? "Your Turn" : "Enemy's Turn";
+    }
+
+    function hideTurnIndicator() {
+        dom.turnIndicator.classList.remove("active");
+    }
+
+    // ---- Quick-Use Consumable Bar ----
+    function updateQuickUseBar(state) {
+        const bar = dom.quickUseBar;
+        // Clear items (keep label)
+        const existingItems = bar.querySelectorAll(".quick-use-item");
+        existingItems.forEach(el => el.remove());
+
+        const consumables = state.inventory.filter(slot => {
+            const item = ITEMS[slot.id];
+            return item && item.type === "consumable" && slot.qty > 0;
+        });
+
+        if (consumables.length === 0) {
+            bar.classList.remove("active");
+            return;
+        }
+
+        bar.classList.add("active");
+
+        consumables.forEach(slot => {
+            const item = ITEMS[slot.id];
+            const el = document.createElement("div");
+            el.className = "quick-use-item";
+            el.innerHTML = `
+                <i class="fa-solid ${item.icon}" style="color: ${item.iconColor}"></i>
+                ${item.name}
+                <span class="quick-use-qty">x${slot.qty}</span>
+            `;
+
+            el.addEventListener("click", () => {
+                triggerButtonGlow(el);
+                GameEngine.useItem(slot.id);
+            });
+
+            // Tooltip
+            el.addEventListener("mouseenter", (e) => {
+                showGameTooltip(item, e);
+            });
+            el.addEventListener("mouseleave", hideGameTooltip);
+            el.addEventListener("mousemove", moveGameTooltip);
+
+            bar.appendChild(el);
+        });
     }
 
     // ---- Typing Indicator ----
@@ -238,8 +386,6 @@ const UI = (() => {
         const hpGroup = document.querySelector(".bar-hp");
         hpGroup.classList.add("damage-flash");
         dom.gameContainer.classList.add("damage-flash-screen");
-
-        // Screen shake
         dom.gameContainer.classList.add("screen-shake");
 
         setTimeout(() => {
@@ -255,7 +401,6 @@ const UI = (() => {
         el.className = `floating-number ${type}`;
         el.textContent = text;
 
-        // Position near the HP bar area if no coords given
         if (!x || !y) {
             const hpBar = document.querySelector(".bar-hp .resource-bar");
             if (hpBar) {
@@ -271,7 +416,6 @@ const UI = (() => {
         el.style.left = x + "px";
         el.style.top = y + "px";
         document.body.appendChild(el);
-
         setTimeout(() => el.remove(), 1500);
     }
 
@@ -311,10 +455,7 @@ const UI = (() => {
         toast.className = `game-toast toast-${type}`;
         toast.innerHTML = `<i class="fa-solid ${icon}"></i> ${message}`;
         dom.toastContainer.appendChild(toast);
-
-        setTimeout(() => {
-            if (toast.parentNode) toast.remove();
-        }, 3000);
+        setTimeout(() => { if (toast.parentNode) toast.remove(); }, 3000);
     }
 
     // ---- Level Up Overlay ----
@@ -336,16 +477,13 @@ const UI = (() => {
 
     function updateStatsModal(state) {
         document.getElementById("modal-stat-points").textContent = state.statPoints;
-
         document.getElementById("modal-str").textContent = state.str;
         document.getElementById("modal-def").textContent = state.def;
         document.getElementById("modal-int").textContent = state.int;
         document.getElementById("modal-agi").textContent = state.agi;
 
         const btns = document.querySelectorAll(".stat-upgrade-btn");
-        btns.forEach(btn => {
-            btn.disabled = state.statPoints <= 0;
-        });
+        btns.forEach(btn => { btn.disabled = state.statPoints <= 0; });
     }
 
     // ---- Inventory Modal ----
@@ -359,7 +497,6 @@ const UI = (() => {
         const grid = document.getElementById("inventory-grid");
         grid.innerHTML = "";
 
-        // Equipment
         const weapon = ITEMS[state.weapon];
         const armor = ITEMS[state.armor];
         document.getElementById("equipped-weapon-icon").className = `fa-solid ${weapon.icon}`;
@@ -369,18 +506,16 @@ const UI = (() => {
         document.getElementById("equipped-armor-icon").style.color = armor.iconColor;
         document.getElementById("equipped-armor-name").textContent = armor.name;
 
-        // Inventory items (exclude equipped)
         const invItems = state.inventory.filter(i => i.id !== state.weapon && i.id !== state.armor);
 
         invItems.forEach(slot => {
             const item = ITEMS[slot.id];
             if (!item) return;
 
-            const div = document.createElement("div");
-            // Item rarity classes
             const rarity = item.type === "quest" ? "rarity-legendary" :
                 item.type === "valuable" && item.sellPrice && item.sellPrice.min >= 10 ? "rarity-rare" :
                     item.type === "consumable" ? "rarity-uncommon" : "rarity-common";
+            const div = document.createElement("div");
             div.className = `inventory-slot ${rarity}`;
             div.innerHTML = `
                 <i class="fa-solid ${item.icon}" style="color: ${item.iconColor}"></i>
@@ -388,16 +523,13 @@ const UI = (() => {
                 ${slot.qty > 1 ? `<div class="inventory-slot-qty">x${slot.qty}</div>` : ""}
             `;
 
-            // Tooltip on hover
-            div.addEventListener("mouseenter", (e) => {
-                showGameTooltip(item, e);
-            });
+            div.addEventListener("mouseenter", (e) => showGameTooltip(item, e));
             div.addEventListener("mouseleave", hideGameTooltip);
             div.addEventListener("mousemove", moveGameTooltip);
 
             if (item.type === "consumable") {
-                div.addEventListener("click", (e) => {
-                    createRipple(e, div);
+                div.addEventListener("click", () => {
+                    triggerButtonGlow(div);
                     GameEngine.useItem(slot.id);
                 });
                 div.style.cursor = "pointer";
@@ -406,7 +538,6 @@ const UI = (() => {
             grid.appendChild(div);
         });
 
-        // Fill remaining slots
         const remaining = 12 - invItems.length;
         for (let i = 0; i < remaining; i++) {
             const div = document.createElement("div");
@@ -432,37 +563,28 @@ const UI = (() => {
             if (item.effect.mp) statLine += `<div class="game-tooltip-stat">💧 Restores ${item.effect.mp} MP</div>`;
         }
         if (item.bonusStat) {
-            const entries = Object.entries(item.bonusStat);
-            entries.forEach(([k, v]) => {
+            Object.entries(item.bonusStat).forEach(([k, v]) => {
                 statLine += `<div class="game-tooltip-stat">⚔️ +${v} ${k.toUpperCase()}</div>`;
             });
         }
-        if (item.cost) {
-            statLine += `<div class="game-tooltip-stat">💰 Cost: ${item.cost} coins</div>`;
-        }
-        if (item.sellPrice) {
-            statLine += `<div class="game-tooltip-stat">💰 Sell: ${item.sellPrice.min}-${item.sellPrice.max} coins</div>`;
-        }
+        if (item.cost) statLine += `<div class="game-tooltip-stat">💰 Cost: ${item.cost} coins</div>`;
+        if (item.sellPrice) statLine += `<div class="game-tooltip-stat">💰 Sell: ${item.sellPrice.min}-${item.sellPrice.max} coins</div>`;
 
         const typeLabel = item.type.charAt(0).toUpperCase() + item.type.slice(1);
 
         tip.innerHTML = `
-            <div class="game-tooltip-title">${item.name} <small style="color:var(--text-muted);font-family:var(--font-ui);font-size:0.7rem;">[${typeLabel}]</small></div>
+            <div class="game-tooltip-title">${item.name} <small style="color:var(--text-muted);font-family:var(--font-mono);font-size:0.7rem;">[${typeLabel}]</small></div>
             <div class="game-tooltip-desc">${item.description}</div>
             ${statLine}
         `;
 
         document.body.appendChild(tip);
         activeTooltip = tip;
-
-        // Position
         positionTooltip(event.clientX, event.clientY);
     }
 
     function moveGameTooltip(event) {
-        if (activeTooltip) {
-            positionTooltip(event.clientX, event.clientY);
-        }
+        if (activeTooltip) positionTooltip(event.clientX, event.clientY);
     }
 
     function positionTooltip(x, y) {
@@ -471,14 +593,9 @@ const UI = (() => {
         let left = x + pad;
         let top = y + pad;
 
-        // Keep on screen
         const rect = activeTooltip.getBoundingClientRect();
-        if (left + rect.width > window.innerWidth) {
-            left = x - rect.width - pad;
-        }
-        if (top + rect.height > window.innerHeight) {
-            top = y - rect.height - pad;
-        }
+        if (left + rect.width > window.innerWidth) left = x - rect.width - pad;
+        if (top + rect.height > window.innerHeight) top = y - rect.height - pad;
 
         activeTooltip.style.left = left + "px";
         activeTooltip.style.top = top + "px";
@@ -492,7 +609,7 @@ const UI = (() => {
 
     // ---- HUD Stat Tooltips ----
     function initStatTooltips() {
-        const statDescriptions = {
+        const descriptions = {
             str: { name: "Strength", desc: "Boosts physical damage and max HP" },
             def: { name: "Defense", desc: "Reduces incoming damage from attacks" },
             int: { name: "Intelligence", desc: "Increases magic damage and max MP" },
@@ -500,19 +617,17 @@ const UI = (() => {
         };
 
         document.querySelectorAll(".stat-item").forEach(item => {
-            const statClass = item.querySelector(".stat-icon")?.classList;
+            const iconEl = item.querySelector(".stat-icon");
+            if (!iconEl) return;
             let statKey = null;
-            if (statClass) {
-                if (statClass.contains("str")) statKey = "str";
-                else if (statClass.contains("def")) statKey = "def";
-                else if (statClass.contains("int")) statKey = "int";
-                else if (statClass.contains("agi")) statKey = "agi";
-            }
+            ["str", "def", "int", "agi"].forEach(k => {
+                if (iconEl.classList.contains(k)) statKey = k;
+            });
 
             if (statKey) {
                 item.dataset.tooltip = "true";
                 item.addEventListener("mouseenter", (e) => {
-                    const info = statDescriptions[statKey];
+                    const info = descriptions[statKey];
                     const tip = document.createElement("div");
                     tip.className = "game-tooltip";
                     tip.id = "active-game-tooltip";
@@ -524,11 +639,45 @@ const UI = (() => {
                     activeTooltip = tip;
                     positionTooltip(e.clientX, e.clientY);
                 });
-
                 item.addEventListener("mouseleave", hideGameTooltip);
                 item.addEventListener("mousemove", moveGameTooltip);
             }
         });
+    }
+
+    // ---- Collapsible Sidebar Sections ----
+    function initCollapsibleSections() {
+        const sections = document.querySelectorAll(".hud-section[data-section]");
+        const saved = JSON.parse(localStorage.getItem("tsw_collapsed") || "{}");
+
+        sections.forEach(section => {
+            const key = section.dataset.section;
+            const title = section.querySelector(".hud-section-title");
+
+            // Restore saved state
+            if (saved[key]) {
+                section.classList.add("collapsed");
+            }
+
+            title.addEventListener("click", () => {
+                section.classList.toggle("collapsed");
+                // Save state
+                const current = JSON.parse(localStorage.getItem("tsw_collapsed") || "{}");
+                current[key] = section.classList.contains("collapsed");
+                localStorage.setItem("tsw_collapsed", JSON.stringify(current));
+            });
+        });
+    }
+
+    // ---- Auto-Save Indicator ----
+    let autoSaveTimeout = null;
+    function triggerAutoSave() {
+        // Show the indicator briefly
+        dom.autoSaveIndicator.classList.add("visible");
+        clearTimeout(autoSaveTimeout);
+        autoSaveTimeout = setTimeout(() => {
+            dom.autoSaveIndicator.classList.remove("visible");
+        }, 1500);
     }
 
     // ---- Save / Load Modal ----
@@ -593,11 +742,10 @@ const UI = (() => {
             container.appendChild(div);
         });
 
-        // Attach event listeners
         container.querySelectorAll("[data-save]").forEach(btn => {
             btn.addEventListener("click", (e) => {
                 e.stopPropagation();
-                createRipple(e, btn);
+                triggerButtonGlow(btn);
                 GameEngine.saveGame(parseInt(btn.dataset.save));
             });
         });
@@ -605,7 +753,7 @@ const UI = (() => {
         container.querySelectorAll("[data-load]").forEach(btn => {
             btn.addEventListener("click", (e) => {
                 e.stopPropagation();
-                createRipple(e, btn);
+                triggerButtonGlow(btn);
                 GameEngine.loadGame(parseInt(btn.dataset.load));
                 bootstrap.Modal.getInstance(dom.saveModal).hide();
             });
@@ -622,29 +770,22 @@ const UI = (() => {
     // ---- Keyboard Shortcuts ----
     function initKeyboardShortcuts() {
         document.addEventListener("keydown", (e) => {
-            // Don't trigger if typing in input
             if (document.activeElement === dom.customInput) return;
-            // Don't trigger if a modal is open
             if (document.querySelector(".modal.show")) return;
 
             switch (e.key) {
                 case "1": case "2": case "3": case "4":
                     const idx = parseInt(e.key) - 1;
                     const btns = dom.choicesContainer.querySelectorAll(".choice-btn:not([disabled])");
-                    if (btns[idx]) {
-                        btns[idx].click();
-                    }
+                    if (btns[idx]) btns[idx].click();
                     break;
-                case "s":
-                case "S":
+                case "s": case "S":
                     if (!e.ctrlKey && !e.metaKey) openStatsModal();
                     break;
-                case "i":
-                case "I":
+                case "i": case "I":
                     openInventoryModal();
                     break;
-                case "f":
-                case "F":
+                case "f": case "F":
                     openSaveModal();
                     break;
                 case "/":
@@ -675,17 +816,14 @@ const UI = (() => {
         });
 
         dom.customInput.addEventListener("keydown", (e) => {
-            if (e.key === "Enter") {
-                dom.sendBtn.click();
-            }
+            if (e.key === "Enter") dom.sendBtn.click();
         });
 
         // Stat allocation buttons
         document.querySelectorAll(".stat-upgrade-btn").forEach(btn => {
-            btn.addEventListener("click", (e) => {
-                createRipple(e, btn);
-                const stat = btn.dataset.stat;
-                GameEngine.allocateStat(stat);
+            btn.addEventListener("click", () => {
+                triggerButtonGlow(btn);
+                GameEngine.allocateStat(btn.dataset.stat);
             });
         });
 
@@ -695,10 +833,9 @@ const UI = (() => {
             openStatsModal();
         });
 
-        // HUD buttons — with ripple
-        const hudBtns = document.querySelectorAll(".hud-btn");
-        hudBtns.forEach(btn => {
-            btn.addEventListener("click", (e) => createRipple(e, btn));
+        // HUD buttons — with glow
+        document.querySelectorAll(".hud-btn").forEach(btn => {
+            btn.addEventListener("click", () => triggerButtonGlow(btn));
         });
 
         document.getElementById("btn-stats").addEventListener("click", openStatsModal);
@@ -711,9 +848,10 @@ const UI = (() => {
             showToast("Settings coming soon!", "warning", "fa-gear");
         });
 
-        // Init interactive systems
+        // Init systems
         initKeyboardShortcuts();
         initStatTooltips();
+        initCollapsibleSections();
     }
 
     // ---- Public API ----
@@ -721,6 +859,7 @@ const UI = (() => {
         init,
         updateHUD,
         updateLocation,
+        playRegionTransition,
         addNarrative,
         showChoices,
         disableChoices,
@@ -728,6 +867,8 @@ const UI = (() => {
         hideTypingIndicator,
         flashDamage,
         showFloatingNumber,
+        showTurnIndicator,
+        hideTurnIndicator,
         showEnemyPanel,
         updateEnemyHp,
         hideEnemyPanel,

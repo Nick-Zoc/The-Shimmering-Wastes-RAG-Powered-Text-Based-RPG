@@ -1,7 +1,7 @@
 // ============================================================
-// THE SHIMMERING WASTES — Mock Game Engine v2.1
+// THE SHIMMERING WASTES — Mock Game Engine v2.2
 // State management, game logic, time-of-day theming,
-// particle effects, save system, floating combat numbers
+// particle effects, save system, region transitions
 // ============================================================
 
 const GameEngine = (() => {
@@ -82,16 +82,34 @@ const GameEngine = (() => {
 
             // Apply state updates
             if (scenario.stateUpdates) {
-                applyStateUpdates(scenario.stateUpdates);
-            }
+                // Region transition for combat/area changes
+                const isRegionChange = scenario.stateUpdates.combat_active === true ||
+                    scenario.stateUpdates.combat_active === false;
 
-            // Show narrative
-            UI.addNarrative(scenario.narrative, "gm");
+                if (isRegionChange) {
+                    UI.playRegionTransition(() => {
+                        applyStateUpdates(scenario.stateUpdates);
+                        UI.addNarrative(scenario.narrative, "gm");
+                    });
+                } else {
+                    applyStateUpdates(scenario.stateUpdates);
+                    UI.addNarrative(scenario.narrative, "gm");
+                }
+            } else {
+                UI.addNarrative(scenario.narrative, "gm");
+            }
 
             // Show new choices
             setTimeout(() => {
                 if (scenario.choices) {
                     UI.showChoices(scenario.choices);
+
+                    // Show turn indicator during combat
+                    if (state.combatActive) {
+                        UI.showTurnIndicator(true);
+                    } else {
+                        UI.hideTurnIndicator();
+                    }
                 }
             }, 400);
 
@@ -180,6 +198,7 @@ const GameEngine = (() => {
             state.currentEnemy = null;
             state.currentEnemyHp = 0;
             UI.hideEnemyPanel();
+            UI.hideTurnIndicator();
 
             if (!state.combatActive) {
                 state.currentRegion = "last_bastion";
@@ -267,6 +286,7 @@ const GameEngine = (() => {
         state.day++;
         state.currentRegion = "last_bastion";
         UI.hideEnemyPanel();
+        UI.hideTurnIndicator();
         UI.updateLocation(REGIONS.last_bastion);
         applyTimeTheme();
 
@@ -490,9 +510,7 @@ const ParticleEngine = (() => {
         3: ["#4060ff", "#6080ff", "#8090c0", "#2040a0"]        // Night: cool blue
     };
 
-    // Detect mobile/low-end for reduced particles
-    const isMobile = /Mobi|Android|iPhone/i.test(navigator.userAgent) || window.innerWidth < 768;
-    const PARTICLE_COUNT = isMobile ? 30 : 50;
+    const PARTICLE_COUNT = 50;
 
     function init() {
         canvas = document.getElementById("particle-canvas");
@@ -592,13 +610,11 @@ const ParticleEngine = (() => {
                 ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
                 ctx.fill();
 
-                // Soft glow (skip on mobile for perf)
-                if (!isMobile) {
-                    ctx.globalAlpha = alpha * 0.12;
-                    ctx.beginPath();
-                    ctx.arc(p.x, p.y, p.size * 2.5, 0, Math.PI * 2);
-                    ctx.fill();
-                }
+                // Soft glow
+                ctx.globalAlpha = alpha * 0.12;
+                ctx.beginPath();
+                ctx.arc(p.x, p.y, p.size * 2.5, 0, Math.PI * 2);
+                ctx.fill();
             });
         }
 
