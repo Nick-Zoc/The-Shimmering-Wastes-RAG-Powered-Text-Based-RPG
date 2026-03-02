@@ -2479,3 +2479,445 @@ body::before {
     border: 1px solid var(--border-subtle);
     flex-shrink: 0;
 }
+
+/* ============================================================
+   V3 PHASE 2: Main Menu, VN Intro, Character Creation, Effects
+   ============================================================ */
+/* ---- Audio Controls ---- */
+.music-btn {
+    position: fixed;
+    top: 20px;
+    right: 20px;
+    background: rgba(13, 17, 23, 0.7);
+    border: 1px solid var(--border-subtle);
+    color: var(--text-muted);
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    z-index: 10000;
+    transition: all 0.3s;
+}
+
+.music-btn:hover {
+    color: var(--teal);
+    border-color: var(--teal);
+}
+
+/* ---- Screen Layers ---- */
+.screen-layer {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    z-index: 5000;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    background: var(--bg-deepest);
+}
+
+/* ---- Main Menu ---- */
+.menu-bg {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-size: cover;
+    background-position: center;
+    opacity: 0.6;
+    z-index: -1;
+}
+
+.menu-content {
+    text-align: center;
+    z-index: 10;
+}
+
+.game-title {
+    font-family: var(--font-heading);
+    font-size: 4rem;
+    font-weight: 900;
+    color: #fff;
+    text-shadow: 0 0 20px var(--teal), 0 0 40px rgba(0, 245, 212, 0.5);
+    margin-bottom: 0.5rem;
+    letter-spacing: 4px;
+}
+
+.game-subtitle {
+    font-family: var(--font-mono);
+    font-size: 1.2rem;
+    color: var(--text-muted);
+    letter-spacing: 6px;
+    text-transform: uppercase;
+    margin-bottom: 3rem;
+}
+
+.menu-options {
+    display: flex;
+    flex-direction: column;
+    gap: 15px;
+    align-items: center;
+}
+
+.menu-btn {
+    background: rgba(33, 40, 59, 0.8);
+    border: 1px solid var(--border-subtle);
+    color: var(--text-light);
+    font-family: var(--font-heading);
+    font-size: 1.2rem;
+    padding: 12px 30px;
+    min-width: 250px;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    text-transform: uppercase;
+    letter-spacing: 2px;
+}
+
+.menu-btn i {
+    margin-right: 10px;
+    color: var(--teal);
+}
+
+.menu-btn:hover:not(:disabled) {
+    background: var(--bg-card-hover);
+    border-color: var(--teal);
+    box-shadow: 0 0 15px rgba(0, 245, 212, 0.3);
+    transform: translateY(-2px);
+}
+
+.menu-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+/* ---- Visual Novel Intro ---- */
+.vn-bg {
+    position: absolute;
+    top: -5%;
+    left: -5%;
+    width: 110%;
+    height: 110%;
+    background-size: cover;
+    background-position: center;
+    opacity: 0.4;
+    z-index: -1;
+    animation: slowPan 30s infinite alternate linear;
+}
+
+@keyframes slowPan {
+    from {
+        transform: translate(0, 0) scale(1.05);
+    }
+
+    to {
+        transform: translate(-2%, -2%) scale(1);
+    }
+}
+
+.vn-dialogue-box {
+    position: absolute;
+    bottom: 40px;
+    width: 80%;
+    max-width: 900px;
+    background: rgba(22, 27, 34, 0.9);
+    border: 1px solid var(--border-subtle);
+    border-radius: 8px;
+    padding: 30px;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.8);
+    backdrop-filter: blur(5px);
+}
+
+.vn-speaker {
+    font-family: var(--font-heading);
+    font-size: 1.2rem;
+    color: var(--teal);
+    margin-bottom: 10px;
+    font-weight: bold;
+    letter-spacing: 1px;
+}
+
+.vn-text {
+    font-family: var(--font-body);
+    font-size: 1.1rem;
+    color: var(--text-light);
+    line-height: 1.6;
+    min-height: 80px;
+}
+
+.vn-controls {
+    display: flex;
+    justify-content: flex-end;
+    margin-top: 15px;
+}
+
+.vn-next-btn {
+    background: transparent;
+    border: none;
+    color: var(--text-muted);
+    font-family: var(--font-mono);
+    cursor: pointer;
+    font-size: 1rem;
+    transition: color 0.3s;
+}
+
+.vn-next-btn:hover {
+    color: var(--text-light);
+}
+
+/* ---- Character Creation ---- */
+.char-create-overlay {
+    background: rgba(13, 17, 23, 0.95);
+    padding: 40px;
+    border-radius: 12px;
+    border: 1px solid var(--border-subtle);
+    width: 90%;
+    max-width: 800px;
+    text-align: center;
+    box-shadow: 0 0 40px rgba(0, 245, 212, 0.1);
+}
+
+.char-create-overlay h2 {
+    font-family: var(--font-heading);
+    color: var(--teal);
+    margin-bottom: 30px;
+}
+
+.char-name-group input {
+    background: var(--bg-dark);
+    border: 1px solid var(--border-subtle);
+    color: #fff;
+    padding: 10px 15px;
+    font-family: var(--font-mono);
+    width: 300px;
+    border-radius: 4px;
+    margin-left: 15px;
+}
+
+.char-name-group input:focus {
+    outline: none;
+    border-color: var(--teal);
+    box-shadow: 0 0 10px rgba(0, 245, 212, 0.2);
+}
+
+.build-grid {
+    display: flex;
+    justify-content: center;
+    gap: 15px;
+    margin-top: 20px;
+    flex-wrap: wrap;
+}
+
+.build-card {
+    background: var(--bg-dark);
+    border: 1px solid var(--border-subtle);
+    border-radius: 8px;
+    padding: 15px;
+    width: 130px;
+    cursor: pointer;
+    transition: all 0.3s;
+    user-select: none;
+}
+
+.build-card:hover {
+    border-color: var(--text-muted);
+    transform: translateY(-5px);
+}
+
+.build-card.selected {
+    border-color: var(--teal);
+    background: var(--bg-card);
+    box-shadow: 0 0 15px rgba(0, 245, 212, 0.2);
+}
+
+.build-avatar {
+    width: 64px;
+    height: 64px;
+    border-radius: 8px;
+    margin: 0 auto 10px;
+    border: 1px solid var(--border-divider);
+    display: block;
+    object-fit: cover;
+}
+
+.build-name {
+    font-family: var(--font-heading);
+    font-size: 0.9rem;
+    color: var(--text-light);
+    margin-bottom: 5px;
+}
+
+.build-stat {
+    font-family: var(--font-mono);
+    font-size: 0.75rem;
+    color: var(--teal);
+}
+
+/* ---- Slash VFX ---- */
+.slash-vfx {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%) scale(0);
+    width: 250px;
+    height: 250px;
+    background-image: url('../img/slash_fx.png');
+    background-size: contain;
+    background-position: center;
+    background-repeat: no-repeat;
+    pointer-events: none;
+    z-index: 100;
+    opacity: 0;
+}
+
+.slash-vfx.active {
+    animation: slashStrike 0.4s cubic-bezier(0.1, 0.9, 0.2, 1) forwards;
+}
+
+@keyframes slashStrike {
+    0% {
+        transform: translate(-50%, -50%) scale(0.5) rotate(-30deg);
+        opacity: 0;
+    }
+
+    30% {
+        transform: translate(-50%, -50%) scale(1.2) rotate(10deg);
+        opacity: 1;
+        filter: drop-shadow(0 0 10px var(--teal));
+    }
+
+    100% {
+        transform: translate(-50%, -50%) scale(1.5) rotate(45deg);
+        opacity: 0;
+        filter: drop-shadow(0 0 20px var(--teal));
+    }
+}
+
+/* ---- Overhauled Level Up Modal ---- */
+.level-up-modal-content {
+    background: var(--bg-deepest);
+    border: 2px solid var(--primary-accent);
+    box-shadow: 0 0 50px rgba(255, 215, 0, 0.3);
+    text-align: center;
+    padding: 40px;
+    position: relative;
+    overflow: hidden;
+    border-radius: 12px;
+}
+
+.level-up-modal-content::before {
+    content: '';
+    position: absolute;
+    top: -50%;
+    left: -50%;
+    width: 200%;
+    height: 200%;
+    background: conic-gradient(from 0deg, transparent 0deg, rgba(255, 215, 0, 0.1) 60deg, transparent 120deg);
+    animation: spinRays 8s linear infinite;
+    z-index: 0;
+}
+
+@keyframes spinRays {
+    100% {
+        transform: rotate(360deg);
+    }
+}
+
+.level-up-content-wrapper {
+    position: relative;
+    z-index: 1;
+}
+
+.level-up-icon {
+    font-size: 4rem;
+    color: var(--primary-accent);
+    margin-bottom: 20px;
+    text-shadow: 0 0 20px rgba(255, 215, 0, 0.6);
+    animation: floatLevel 2s ease-in-out infinite;
+}
+
+.level-up-title {
+    font-family: var(--font-heading);
+    font-size: 3rem;
+    color: #fff;
+    margin-bottom: 5px;
+    letter-spacing: 2px;
+}
+
+.level-up-stats {
+    display: flex;
+    justify-content: center;
+    gap: 30px;
+    margin-top: 30px;
+    margin-bottom: 30px;
+}
+
+.level-stat-box {
+    background: rgba(33, 40, 59, 0.8);
+    border: 1px solid var(--primary-accent);
+    padding: 15px;
+    border-radius: 8px;
+    min-width: 80px;
+    animation: popIn 0.5s ease-out backwards;
+}
+
+.level-stat-box:nth-child(2) {
+    animation-delay: 0.1s;
+}
+
+.level-stat-box:nth-child(3) {
+    animation-delay: 0.2s;
+}
+
+.level-stat-box:nth-child(4) {
+    animation-delay: 0.3s;
+}
+
+.level-stat-box i {
+    font-size: 1.5rem;
+    margin-bottom: 10px;
+    color: var(--teal);
+}
+
+.level-stat-box .stat-val {
+    font-family: var(--font-mono);
+    font-size: 1.2rem;
+    font-weight: bold;
+    color: var(--text-light);
+}
+
+@keyframes popIn {
+    0% {
+        transform: scale(0.5);
+        opacity: 0;
+    }
+
+    80% {
+        transform: scale(1.1);
+    }
+
+    100% {
+        transform: scale(1);
+        opacity: 1;
+    }
+}
+
+@keyframes floatLevel {
+
+    0%,
+    100% {
+        transform: translateY(0);
+    }
+
+    50% {
+        transform: translateY(-10px);
+        filter: drop-shadow(0 0 15px rgba(255, 215, 0, 0.8));
+    }
+}

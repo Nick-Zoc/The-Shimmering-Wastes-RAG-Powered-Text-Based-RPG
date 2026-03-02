@@ -32,8 +32,61 @@
         <i class="fa-solid fa-floppy-disk"></i> Auto-saved
     </div>
 
+    <!-- ========== AUDIO SYSTEM ========== -->
+    <audio id="bg-music" loop>
+        <source src="audio/bg_music.mp3" type="audio/mpeg">
+    </audio>
+    <button id="music-toggle" class="music-btn" title="Toggle Music">
+        <i class="fa-solid fa-volume-xmark" id="music-icon"></i>
+    </button>
+
+    <!-- ========== MAIN MENU ========== -->
+    <div id="main-menu-screen" class="screen-layer active">
+        <div class="menu-bg" style="background-image: url('img/main_menu_bg.png');"></div>
+        <div class="menu-content">
+            <h1 class="game-title">The Shimmering Wastes</h1>
+            <p class="game-subtitle">A Text-Based Idle RPG</p>
+            <div class="menu-options">
+                <button id="btn-new-game" class="menu-btn"><i class="fa-solid fa-play"></i> New Game</button>
+                <button id="btn-load-game" class="menu-btn"><i class="fa-solid fa-upload"></i> Load Game</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ========== VISUAL NOVEL INTRO ========== -->
+    <div id="vn-screen" class="screen-layer" style="display: none;">
+        <div class="vn-bg" id="vn-bg-layer" style="background-image: url('img/main_menu_bg.png');"></div>
+        <div class="vn-dialogue-box">
+            <div class="vn-speaker" id="vn-speaker">???</div>
+            <div class="vn-text" id="vn-text">...</div>
+            <div class="vn-controls">
+                <button id="vn-next" class="vn-next-btn">Next <i class="fa-solid fa-caret-right"></i></button>
+            </div>
+        </div>
+
+        <!-- Character Creation Overlay (Inside VN Screen) -->
+        <div id="character-creation" class="char-create-overlay" style="display: none;">
+            <h2>Who are you, survivor?</h2>
+
+            <div class="char-name-group">
+                <label for="char-name-input">Name</label>
+                <input type="text" id="char-name-input" placeholder="Enter your name..." value="The Scrapper"
+                    maxlength="16">
+            </div>
+
+            <h3 class="mt-4">Choose Your Build</h3>
+            <div class="build-grid" id="build-grid">
+                <!-- Builds injected here via JS -->
+            </div>
+
+            <div class="text-center mt-4">
+                <button id="btn-start-adventure" class="menu-btn" disabled>Begin Journey</button>
+            </div>
+        </div>
+    </div>
+
     <!-- ========== GAME CONTAINER ========== -->
-    <div class="game-container" id="game-container">
+    <div class="game-container" id="game-container" style="display: none;">
 
         <!-- ==========================================
              HUD SIDEBAR (Left Panel)

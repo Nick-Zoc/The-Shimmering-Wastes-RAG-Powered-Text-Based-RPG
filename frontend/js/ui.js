@@ -72,6 +72,22 @@ const UI = (() => {
         dom.statsModal = document.getElementById("statsModal");
         dom.inventoryModal = document.getElementById("inventoryModal");
         dom.saveModal = document.getElementById("saveModal");
+
+        // V3 New DOM
+        dom.bgMusic = document.getElementById("bg-music");
+        dom.musicToggle = document.getElementById("music-toggle");
+        dom.musicIcon = document.getElementById("music-icon");
+        dom.mainMenuScreen = document.getElementById("main-menu-screen");
+        dom.btnNewGame = document.getElementById("btn-new-game");
+        dom.btnLoadGame = document.getElementById("btn-load-game");
+        dom.vnScreen = document.getElementById("vn-screen");
+        dom.vnSpeaker = document.getElementById("vn-speaker");
+        dom.vnText = document.getElementById("vn-text");
+        dom.vnNextBtn = document.getElementById("vn-next");
+        dom.charCreation = document.getElementById("character-creation");
+        dom.charNameInput = document.getElementById("char-name-input");
+        dom.buildGrid = document.getElementById("build-grid");
+        dom.btnStartAdventure = document.getElementById("btn-start-adventure");
     }
 
     // ---- Update HUD with change detection ----
@@ -470,7 +486,14 @@ const UI = (() => {
 
     // ---- Level Up Overlay ----
     function showLevelUpOverlay(level) {
-        dom.levelUpLevel.textContent = `Level ${level}`;
+        dom.levelUpLevel.innerHTML = `
+            Level ${level}!
+            <div class="level-up-stats">
+                <div class="level-stat-box"><i class="fa-solid fa-heart-pulse"></i><div class="stat-val">+HP/MP</div></div>
+                <div class="level-stat-box"><i class="fa-solid fa-arrow-up-right-dots"></i><div class="stat-val">+3 Points</div></div>
+                <div class="level-stat-box"><i class="fa-solid fa-dumbbell"></i><div class="stat-val">+1 All</div></div>
+            </div>
+        `;
         dom.levelUpOverlay.classList.add("active");
     }
 
@@ -863,6 +886,155 @@ const UI = (() => {
         initKeyboardShortcuts();
         initStatTooltips();
         initGlobalTooltipCleanup();
+        initV3Systems();
+    }
+
+    // ==========================================
+    // V3: MAIN MENU & VISUAL NOVEL & FX
+    // ==========================================
+    const VN_STORY = [
+        { speaker: "???", text: "The Old World died a long time ago. Magic and metal tore the planet apart." },
+        { speaker: "???", text: "Now, only the Shimmering Wastes remain. And the things that crawl out of the ash." },
+        { speaker: "Silas", text: "Hey! You! Over here, before the Ash Hounds see you!" }
+    ];
+    let vnStep = 0;
+
+    const BUILDS = [
+        { id: "bruiser", name: "Bruiser", stats: { maxHp: 65, maxMp: 20, str: 7, def: 4, int: 2, agi: 3 }, avatar: "img/avatar_bruiser.png" },
+        { id: "scout", name: "Scout", stats: { maxHp: 45, maxMp: 25, str: 4, def: 3, int: 3, agi: 7 }, avatar: "img/avatar_scout.png" },
+        { id: "scholar", name: "Scholar", stats: { maxHp: 40, maxMp: 45, str: 2, def: 2, int: 8, agi: 4 }, avatar: "img/avatar_scholar.png" },
+        { id: "vanguard", name: "Vanguard", stats: { maxHp: 60, maxMp: 20, str: 4, def: 7, int: 3, agi: 2 }, avatar: "img/avatar_vanguard.png" },
+        { id: "survivor", name: "Survivor", stats: { maxHp: 50, maxMp: 30, str: 5, def: 5, int: 5, agi: 5 }, avatar: "img/avatar_survivor.png" }
+    ];
+    let selectedBuild = null;
+
+    function initV3Systems() {
+        // Audio Toggle
+        if (dom.musicToggle) {
+            dom.musicToggle.addEventListener("click", () => {
+                const audio = dom.bgMusic;
+                if (!audio) return;
+
+                if (audio.paused) {
+                    audio.volume = 0.3; // BG music nice and low
+                    audio.play().catch(e => console.log("Audio play blocked by browser"));
+                    dom.musicIcon.classList.replace("fa-volume-xmark", "fa-volume-high");
+                    dom.musicIcon.style.color = "var(--teal)";
+                } else {
+                    audio.pause();
+                    dom.musicIcon.classList.replace("fa-volume-high", "fa-volume-xmark");
+                    dom.musicIcon.style.color = "";
+                }
+            });
+        }
+
+        // Main Menu Buttons
+        if (dom.btnNewGame) {
+            dom.btnNewGame.addEventListener("click", () => {
+                dom.mainMenuScreen.classList.remove("active");
+                dom.mainMenuScreen.style.display = "none";
+                startVNIntro();
+            });
+        }
+        if (dom.btnLoadGame) {
+            dom.btnLoadGame.addEventListener("click", () => {
+                dom.mainMenuScreen.classList.remove("active");
+                dom.mainMenuScreen.style.display = "none";
+                dom.gameContainer.style.display = "flex";
+
+                // Show load modal automatically
+                openSaveModal();
+            });
+        }
+
+        // Build Grid Population
+        if (dom.buildGrid) {
+            dom.buildGrid.innerHTML = "";
+            BUILDS.forEach(b => {
+                const card = document.createElement("div");
+                card.className = "build-card";
+                card.innerHTML = `
+                    <img src="${b.avatar}" class="build-avatar" alt="${b.name}">
+                    <div class="build-name">${b.name}</div>
+                    <div class="build-stat">STR ${b.stats.str} | DEF ${b.stats.def}</div>
+                `;
+                card.addEventListener("click", () => selectBuild(b, card));
+                dom.buildGrid.appendChild(card);
+            });
+        }
+
+        // Adventure Start
+        if (dom.btnStartAdventure) {
+            dom.btnStartAdventure.addEventListener("click", () => {
+                const name = dom.charNameInput.value.trim() || "The Scrapper";
+                dom.vnScreen.style.display = "none";
+                dom.gameContainer.style.display = "flex";
+
+                // Boot game
+                GameEngine.startNewGame(name, selectedBuild);
+            });
+        }
+    }
+
+    function startVNIntro() {
+        dom.vnScreen.style.display = "flex";
+        vnStep = 0;
+        showVnDialogue();
+
+        dom.vnNextBtn.addEventListener("click", handleVnNext);
+    }
+
+    function handleVnNext() {
+        vnStep++;
+        if (vnStep < VN_STORY.length) {
+            showVnDialogue();
+        } else {
+            // End of story, show character creation
+            dom.vnNextBtn.style.display = "none";
+            document.querySelector(".vn-dialogue-box").style.display = "none";
+            dom.charCreation.style.display = "block";
+        }
+    }
+
+    function showVnDialogue() {
+        const line = VN_STORY[vnStep];
+        dom.vnSpeaker.textContent = line.speaker;
+
+        // Typewriter effect for VN
+        dom.vnText.innerHTML = "";
+        let i = 0;
+        const text = line.text;
+
+        dom.vnNextBtn.disabled = true;
+
+        const typeInterval = setInterval(() => {
+            if (i < text.length) {
+                dom.vnText.textContent += text.charAt(i);
+                i++;
+            } else {
+                clearInterval(typeInterval);
+                dom.vnNextBtn.disabled = false;
+            }
+        }, 20);
+    }
+
+    function selectBuild(b, cardElement) {
+        selectedBuild = b;
+        document.querySelectorAll(".build-card").forEach(c => c.classList.remove("selected"));
+        cardElement.classList.add("selected");
+        dom.btnStartAdventure.disabled = false;
+    }
+
+    function showSlashAnimation() {
+        // Create the VFX dynamically over the enemy panel
+        const slash = document.createElement("div");
+        slash.className = "slash-vfx active";
+        document.body.appendChild(slash);
+
+        // Clean up
+        setTimeout(() => {
+            slash.remove();
+        }, 450);
     }
 
     // ---- Public API ----
@@ -891,7 +1063,8 @@ const UI = (() => {
         openInventoryModal,
         updateInventoryModal,
         openSaveModal,
-        updateSaveModal
+        updateSaveModal,
+        showSlashAnimation
     };
 })();
 

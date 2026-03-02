@@ -1,14 +1,14 @@
 // ============================================================
-// THE SHIMMERING WASTES — Mock Game Engine v2.3
-// State management, game logic, time-of-day theming,
-// particle effects, save system, enemy turn combat flow,
-// sell system, region transitions with location text
+// THE SHIMMERING WASTES — Game Engine v3.0
+// V3 Flow: VN Intro -> Character Creation -> Start Game
+// Slash VFX, proper region transitions
 // ============================================================
 
 const GameEngine = (() => {
     // ---- Player State ----
     let state = {
         playerName: "The Scrapper",
+        buildId: "survivor",
         level: 1,
         hp: 50,
         maxHp: 50,
@@ -38,14 +38,29 @@ const GameEngine = (() => {
         gameStarted: false
     };
 
-    // Track previous region for transitions
-    let previousRegion = "last_bastion";
-
-    // ---- Initialize ----
+    // Initialize systems without entering the world yet
     function init() {
-        state.gameStarted = true;
         applyTimeTheme();
         ParticleEngine.init();
+    }
+
+    // Launch game from VN Intro
+    function startNewGame(playerName, buildData) {
+        state.playerName = playerName || "The Scrapper";
+        state.gameStarted = true;
+
+        if (buildData) {
+            state.buildId = buildData.id;
+            state.str = buildData.stats.str;
+            state.def = buildData.stats.def;
+            state.int = buildData.stats.int;
+            state.agi = buildData.stats.agi;
+            state.maxHp = buildData.stats.maxHp;
+            state.hp = state.maxHp;
+            state.maxMp = buildData.stats.maxMp;
+            state.mp = state.maxMp;
+        }
+
         UI.updateHUD(state);
         UI.updateLocation(REGIONS[state.currentRegion]);
         UI.addNarrative(INTRO_NARRATIVE, "gm");
@@ -59,17 +74,9 @@ const GameEngine = (() => {
         }, 800);
     }
 
-    // ---- Determine if this is a real region change ----
-    function getTargetRegion(updates) {
-        if (updates.combat_active && updates.current_enemy) {
-            const enemy = ENEMIES[updates.current_enemy];
-            if (enemy) {
-                return enemy.region === "Ash Plains" ? "ash_plains" :
-                    enemy.region === "Crystal Forest" ? "crystal_forest" :
-                        "colossus_crater";
-            }
-        }
-        if (updates.combat_active === false && !state.combatActive) {
+    function getExplicitRegionChange(choiceId) {
+        if (choiceId === "leave_bastion") return "ash_plains";
+        if (choiceId === "explore_bastion" || choiceId === "talk_silas" || choiceId === "talk_elara" || choiceId === "walk_away" || choiceId === "combat_flee") {
             return "last_bastion";
         }
         return null;
@@ -78,7 +85,7 @@ const GameEngine = (() => {
     // ---- Process a Choice ----
     function processChoice(choiceId) {
         const scenario = MOCK_SCENARIOS[choiceId];
-        if (!scenario) {
+        if (!scenario && !choiceId.startsWith("sell_")) {
             UI.addNarrative("<em>The Wastes offer no response to that action... Try something else.</em>", "gm");
             return;
         }
@@ -95,41 +102,30 @@ const GameEngine = (() => {
             UI.addNarrative(choiceText.textContent, "player");
         }
 
-        // Disable choices while processing
         UI.disableChoices();
-
-        // Show typing indicator
         UI.showTypingIndicator();
 
-        // Simulate LLM response delay
+        // Check if player attacked to show slash fx immediately
+        const isCombatAttack = scenario.stateUpdates && scenario.stateUpdates.hp_change && scenario.stateUpdates.hp_change < 0 && state.combatActive;
+        if (choiceId.includes("attack") && isCombatAttack) {
+            setTimeout(() => {
+                UI.showSlashAnimation();
+            }, 100);
+        }
+
         const delay = 600 + Math.random() * 800;
         setTimeout(() => {
             UI.hideTypingIndicator();
 
-            // Determine if we need a region transition
-            let needsTransition = false;
-            let transitionRegionKey = null;
+            let targetRegionKey = getExplicitRegionChange(choiceId);
+            let needsTransition = targetRegionKey && targetRegionKey !== state.currentRegion;
 
-            if (scenario.stateUpdates) {
-                transitionRegionKey = getTargetRegion(scenario.stateUpdates);
-                if (transitionRegionKey && transitionRegionKey !== state.currentRegion) {
-                    needsTransition = true;
-                }
-
-                // Also transition when leaving combat (returning to bastion)
-                if (scenario.stateUpdates.combat_active === false && state.combatActive) {
-                    const returnRegion = "last_bastion";
-                    if (returnRegion !== state.currentRegion) {
-                        needsTransition = true;
-                        transitionRegionKey = returnRegion;
-                    }
-                }
-            }
-
-            if (needsTransition && transitionRegionKey) {
-                const targetRegion = REGIONS[transitionRegionKey];
+            if (needsTransition) {
+                const targetRegion = REGIONS[targetRegionKey];
                 UI.playRegionTransition(targetRegion.name, targetRegion.levelRange, () => {
                     applyStateUpdates(scenario.stateUpdates);
+                    state.currentRegion = targetRegionKey; // Update after transition
+                    UI.updateLocation(REGIONS[state.currentRegion]);
                     UI.addNarrative(scenario.narrative, "gm");
                 });
             } else {
@@ -139,25 +135,16 @@ const GameEngine = (() => {
                 UI.addNarrative(scenario.narrative, "gm");
             }
 
-            // Determine if this is a combat attack that needs enemy turn
-            const isCombatAttack = scenario.stateUpdates &&
-                scenario.stateUpdates.combat_active === true &&
-                scenario.stateUpdates.hp_change &&
-                scenario.stateUpdates.hp_change < 0;
-
             if (isCombatAttack && state.combatActive) {
                 // Two-phase combat: player attack → enemy turn → your turn
                 showPlayerTurnThenEnemyTurn(scenario);
             } else if (scenario.triggerSellMenu) {
-                // Sell menu: show dynamic sell choices
                 setTimeout(() => showSellChoices(), 600);
             } else {
-                // Normal flow: show choices
                 const choiceDelay = needsTransition ? 2000 : 400;
                 setTimeout(() => {
                     if (scenario.choices) {
                         UI.showChoices(scenario.choices);
-
                         if (state.combatActive) {
                             UI.showTurnIndicator(true);
                         } else {
@@ -167,7 +154,6 @@ const GameEngine = (() => {
                 }, choiceDelay);
             }
 
-            // Open stats if flagged
             if (scenario.stateUpdates && scenario.stateUpdates.openStats) {
                 setTimeout(() => UI.openStatsModal(), 600);
             }
@@ -176,14 +162,11 @@ const GameEngine = (() => {
 
     // ---- Two-Phase Combat Turn ----
     function showPlayerTurnThenEnemyTurn(scenario) {
-        // Phase 1: Show "Your Turn" briefly with player attack result
         UI.showTurnIndicator(true);
 
-        // Phase 2: After 1.2s, switch to "Enemy's Turn"
         setTimeout(() => {
             UI.showTurnIndicator(false); // Enemy's Turn
 
-            // Show enemy counter-attack narrative
             setTimeout(() => {
                 const enemy = ENEMIES[state.currentEnemy];
                 if (enemy) {
@@ -195,7 +178,6 @@ const GameEngine = (() => {
                     );
                 }
 
-                // Phase 3: After 1s, back to "Your Turn" with choices
                 setTimeout(() => {
                     if (scenario.choices) {
                         UI.showTurnIndicator(true); // Your Turn
@@ -208,6 +190,8 @@ const GameEngine = (() => {
 
     // ---- Apply state updates from scenario ----
     function applyStateUpdates(updates) {
+        if (!updates) return;
+
         if (updates.hp_change) {
             state.hp = Math.max(0, Math.min(state.maxHp, state.hp + updates.hp_change));
             if (updates.hp_change < 0) {
@@ -261,12 +245,6 @@ const GameEngine = (() => {
                 state.currentEnemy = updates.current_enemy;
                 state.currentEnemyHp = enemy.hp;
                 UI.showEnemyPanel(enemy);
-
-                // Update region
-                state.currentRegion = enemy.region === "Ash Plains" ? "ash_plains" :
-                    enemy.region === "Crystal Forest" ? "crystal_forest" :
-                        "colossus_crater";
-                UI.updateLocation(REGIONS[state.currentRegion]);
             }
         }
 
@@ -285,10 +263,6 @@ const GameEngine = (() => {
             state.currentEnemyHp = 0;
             UI.hideEnemyPanel();
             UI.hideTurnIndicator();
-
-            if (!state.combatActive) {
-                state.currentRegion = "last_bastion";
-            }
         }
 
         if (updates.current_enemy === null) {
@@ -296,15 +270,8 @@ const GameEngine = (() => {
             UI.hideEnemyPanel();
         }
 
-        // Time
-        if (updates.time_advanced) {
-            advanceTime();
-        }
-
-        // Death check
-        if (state.hp <= 0) {
-            handleDeath();
-        }
+        if (updates.time_advanced) advanceTime();
+        if (state.hp <= 0) handleDeath();
 
         UI.updateHUD(state);
     }
@@ -325,15 +292,10 @@ const GameEngine = (() => {
 
     function applyTimeTheme() {
         const body = document.body;
-        // Remove all time classes
         body.classList.remove("time-morning", "time-afternoon", "time-evening", "time-night");
-
-        // Apply current time class
         const timeClasses = ["time-morning", "time-afternoon", "time-evening", "time-night"];
         body.classList.add(timeClasses[state.timePhase]);
-
-        // Update particle colors based on time
-        ParticleEngine.setTimePhase(state.timePhase);
+        ParticleEngine.setTimePhase(state.timePhase); // Need global access to ParticleEngine
     }
 
     // ---- Level Up ----
@@ -344,13 +306,11 @@ const GameEngine = (() => {
             state.statPoints += 3;
             state.expToLevel = Math.floor(state.expToLevel * 1.3);
 
-            // Full restore
             state.maxHp += 5;
             state.maxMp += 3;
             state.hp = state.maxHp;
             state.mp = state.maxMp;
 
-            // Base stat boost
             state.str += 1;
             state.def += 1;
             state.int += 1;
@@ -432,12 +392,8 @@ It is now <strong>Morning of Day ${state.day}</strong>.`, "gm");
         const slot = state.inventory.find(i => i.id === itemId);
         const item = ITEMS[itemId];
 
-        if (!slot || slot.qty <= 0 || !item || !item.sellPrice) {
-            UI.addNarrative("<em>You don't have that item to sell.</em>", "gm", "silas");
-            return;
-        }
+        if (!slot || slot.qty <= 0 || !item || !item.sellPrice) return;
 
-        // Random sell price within range
         const price = Math.floor(Math.random() * (item.sellPrice.max - item.sellPrice.min + 1)) + item.sellPrice.min;
         state.coins += price;
 
@@ -449,13 +405,9 @@ It is now <strong>Morning of Day ${state.day}</strong>.`, "gm");
         UI.addNarrative(`Silas takes the <strong>${item.name}</strong> and inspects it. <em>"Not bad. I'll give you <strong>${price} coins</strong> for this."</em> He drops the coins into your hand.`, "gm", "silas");
         UI.showToast(`+${price} Coins`, "success", "fa-coins");
         UI.showFloatingNumber(`+${price}`, "coins");
-
         UI.updateHUD(state);
 
-        // Show sell menu again after a brief pause
-        setTimeout(() => {
-            showSellChoices();
-        }, 500);
+        setTimeout(() => showSellChoices(), 500);
     }
 
     function showSellChoices() {
@@ -465,7 +417,6 @@ It is now <strong>Morning of Day ${state.day}</strong>.`, "gm");
         });
 
         const choices = [];
-
         sellableItems.forEach(slot => {
             const item = ITEMS[slot.id];
             choices.push({
@@ -476,7 +427,6 @@ It is now <strong>Morning of Day ${state.day}</strong>.`, "gm");
         });
 
         choices.push({ id: "talk_silas", text: "Back to Silas's shop", icon: "fa-arrow-left" });
-
         UI.showChoices(choices);
     }
 
@@ -516,10 +466,7 @@ It is now <strong>Morning of Day ${state.day}</strong>.`, "gm");
 
             const lower = text.toLowerCase();
             if (lower.includes("attack") || lower.includes("fight") || lower.includes("hit")) {
-                if (state.combatActive) {
-                    processChoice("combat_attack");
-                    return;
-                }
+                if (state.combatActive) return processChoice("combat_attack");
             }
             if (lower.includes("heal") || lower.includes("potion")) {
                 if (useItem("healing_potion")) {
@@ -527,22 +474,10 @@ It is now <strong>Morning of Day ${state.day}</strong>.`, "gm");
                     return;
                 }
             }
-            if (lower.includes("sell")) {
-                showSellChoices();
-                return;
-            }
-            if (lower.includes("explore") || lower.includes("look")) {
-                processChoice("explore_bastion");
-                return;
-            }
-            if (lower.includes("leave") || lower.includes("go out") || lower.includes("ash plains")) {
-                processChoice("leave_bastion");
-                return;
-            }
-            if (lower.includes("save")) {
-                UI.openSaveModal();
-                return;
-            }
+            if (lower.includes("sell")) return showSellChoices();
+            if (lower.includes("explore") || lower.includes("look")) return processChoice("explore_bastion");
+            if (lower.includes("leave") || lower.includes("go out") || lower.includes("ash plains")) return processChoice("leave_bastion");
+            if (lower.includes("save")) return UI.openSaveModal();
 
             UI.addNarrative(`<em>You say "${text}" out loud. The Wastes echo your words back, but nothing happens. Maybe try something more specific.</em>`, "gm");
         }, 800);
@@ -574,6 +509,11 @@ It is now <strong>Morning of Day ${state.day}</strong>.`, "gm");
             const saveData = JSON.parse(raw);
             Object.assign(state, saveData.state);
             applyTimeTheme();
+
+            // Go to game view physically
+            document.getElementById("main-menu-screen").style.display = "none";
+            document.getElementById("game-container").style.display = "flex";
+
             UI.updateHUD(state);
             UI.updateLocation(REGIONS[state.currentRegion]);
             UI.showToast(`Loaded from Slot ${slotId}!`, "success", "fa-upload");
@@ -621,9 +561,9 @@ It is now <strong>Morning of Day ${state.day}</strong>.`, "gm");
         return slots;
     }
 
-    // ---- Public API ----
     return {
         init,
+        startNewGame,
         processChoice,
         processCustomInput,
         allocateStat,
@@ -646,12 +586,11 @@ const ParticleEngine = (() => {
     let animFrame;
     let timePhase = 0;
 
-    // Particle colors per time of day
     const PARTICLE_PALETTES = {
-        0: ["#ffd700", "#ffaa00", "#ffffff", "#ffe4a0"],       // Morning: golden
-        1: ["#ffffff", "#c8deff", "#ffe4b5", "#87ceeb"],       // Afternoon: bright white-blue
-        2: ["#ff6b35", "#ff3d00", "#ffa040", "#cc5500"],       // Evening: sunset orange
-        3: ["#4060ff", "#6080ff", "#8090c0", "#2040a0"]        // Night: cool blue
+        0: ["#ffd700", "#ffaa00", "#ffffff", "#ffe4a0"],
+        1: ["#ffffff", "#c8deff", "#ffe4b5", "#87ceeb"],
+        2: ["#ff6b35", "#ff3d00", "#ffa040", "#cc5500"],
+        3: ["#4060ff", "#6080ff", "#8090c0", "#2040a0"]
     };
 
     const PARTICLE_COUNT = 50;
@@ -662,7 +601,6 @@ const ParticleEngine = (() => {
         ctx = canvas.getContext("2d");
         resize();
 
-        // Debounced resize for performance
         let resizeTimer;
         window.addEventListener("resize", () => {
             clearTimeout(resizeTimer);
@@ -671,7 +609,6 @@ const ParticleEngine = (() => {
 
         createParticles(PARTICLE_COUNT);
 
-        // Pause when tab is hidden to save CPU
         document.addEventListener("visibilitychange", () => {
             if (document.hidden) {
                 if (animFrame) cancelAnimationFrame(animFrame);
@@ -726,14 +663,12 @@ const ParticleEngine = (() => {
         const w = canvas.width;
         const h = canvas.height;
 
-        // Batch by color to minimize state changes
         const byColor = {};
         particles.forEach(p => {
             p.x += p.speedX;
             p.y += p.speedY;
             p.pulse += p.pulseSpeed;
 
-            // Wrap around
             if (p.y < -10) { p.y = h + 10; p.x = Math.random() * w; }
             if (p.x < -10) p.x = w + 10;
             if (p.x > w + 10) p.x = -10;
@@ -742,19 +677,16 @@ const ParticleEngine = (() => {
             byColor[p.color].push(p);
         });
 
-        // Draw batched by color
         for (const color in byColor) {
             ctx.fillStyle = color;
             byColor[color].forEach(p => {
                 const alpha = p.opacity * (0.5 + 0.5 * Math.sin(p.pulse));
 
-                // Main dot
                 ctx.globalAlpha = alpha;
                 ctx.beginPath();
                 ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
                 ctx.fill();
 
-                // Soft glow
                 ctx.globalAlpha = alpha * 0.12;
                 ctx.beginPath();
                 ctx.arc(p.x, p.y, p.size * 2.5, 0, Math.PI * 2);
@@ -766,10 +698,5 @@ const ParticleEngine = (() => {
         animFrame = requestAnimationFrame(animate);
     }
 
-    function destroy() {
-        if (animFrame) cancelAnimationFrame(animFrame);
-        animFrame = null;
-    }
-
-    return { init, setTimePhase, destroy };
+    return { init, setTimePhase };
 })();
