@@ -1,2 +1,37 @@
 .env
-docs/
+.env.*
+!.env.example
+
+# OS and editor metadata
+.DS_Store
+**/.DS_Store
+.idea/
+.vscode/
+
+# JavaScript
+node_modules/
+dist/
+coverage/
+.vite/
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# Local runtime data
+*.sqlite
+*.sqlite3
+backend/data/indexes/
+backend/data/uploads/
+
+# Test and build artifacts
+test-results/
+playwright-report/
+*.log

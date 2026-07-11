@@ -1,2 +1,59 @@
-# The-Shimmering-Wastes-RAG-Powered-Text-Based-RPG
-The Shimmering Wastes is a post-magical-apocalypse fantasy world. This is a RAG-Powered Text Based RPG game
+# The Shimmering Wastes
+
+The Shimmering Wastes is an AI-assisted, turn-based narrative RPG set in a post-magical-apocalypse world. The player is a Scrapper who prepares in the Last Bastion, ventures into dangerous regions, survives deterministic combat, recovers artifacts, and uncovers a grounded story shaped by retrieved world lore.
+
+The repository currently contains a polished static frontend prototype and historical concept documents. The backend, persistence layer, content pipeline, retrieval system, and model integration have not yet been implemented.
+
+## Product direction
+
+- The backend game engine is the only authority for combat, inventory, economy, time, quests, progression, and saves.
+- RAG retrieves relevant canonical lore and player-discovered knowledge.
+- The model may interpret optional free text and narrate outcomes, but it cannot invent or mutate game state.
+- Explicit action buttons remain available, and the game must remain playable when the AI provider is unavailable.
+- The first portfolio milestone is one short, reliable, retrieval-backed expedition from the Last Bastion into the Ash Plains.
+
+## Current prototype
+
+The static prototype includes a main menu, visual-novel intro, five character builds, HUD, scripted exploration, merchant and healer interactions, inventory, save-slot UI with partial `localStorage` saving, and an Ash Plains combat path. It does not call a backend or an AI service.
+
+Run it locally:
+
+```bash
+cd frontend
+python3 -m http.server 8003
+```
+
+Then open `http://127.0.0.1:8003`. Stop the server with `Ctrl+C` when finished.
+
+The current prototype requires network access for Bootstrap, Font Awesome, Google Fonts, and DiceBear avatar requests. The frontend plan replaces those runtime dependencies with a deliberate bundled/local asset setup.
+
+The current uncommitted frontend feature batch is not release-ready. See [Project Status](docs/PROJECT_STATUS.md) and [Frontend Plan](docs/FRONTEND_PLAN.md) before extending it.
+
+## Project documents
+
+Read these in order:
+
+1. [Project Status](docs/PROJECT_STATUS.md) - concise current truth and immediate next work.
+2. [Roadmap](docs/ROADMAP.md) - phase checklists, gates, and notes.
+3. [Architecture](docs/ARCHITECTURE.md) - target components and authoritative turn flow.
+4. [Game Design](docs/GAME_DESIGN.md) - product loop and deterministic mechanics.
+5. [Content and RAG](docs/CONTENT_AND_RAG.md) - lore sources, ingestion, retrieval, assets, and evaluation.
+6. [Frontend Plan](docs/FRONTEND_PLAN.md) - stabilization, migration, integration, and feature plan.
+7. [Agent Workflow](AGENTS.md) - rules for future implementation runs.
+
+The two PDF files under `docs/` are original concept material. They are useful historical seeds, but they are no longer canonical because their mechanics, data, and AI authority model conflict with the current prototype and target architecture.
+
+## Target stack
+
+- Frontend: React, TypeScript, and Vite, migrated incrementally from the current visual prototype.
+- API: FastAPI with Pydantic contracts.
+- Game engine: pure deterministic Python domain logic with seeded RNG.
+- Persistence and retrieval: PostgreSQL with pgvector.
+- AI integration: a direct provider SDK behind small `IntentInterpreter`, `Embedder`, and `Narrator` interfaces.
+- Quality: unit, contract, integration, browser, accessibility, retrieval, grounding, latency, and cost tests.
+
+See [Architecture](docs/ARCHITECTURE.md) for the rationale and migration path.
+
+## License and assets
+
+Source code is licensed under [Apache License 2.0](LICENSE). External/generated asset attribution and usage rights are still being cataloged; do not treat every current image/audio file as cleared for redistribution until the asset manifest is complete.
