@@ -1,7 +1,6 @@
 // ============================================================
-// THE SHIMMERING WASTES — UI Controller v2.3
-// Typewriter, tooltips (fixed persistence), NPC avatars,
-// quick-use bar, turn indicator, region transitions, glow
+// THE SHIMMERING WASTES — UI Controller
+// Accessible vanilla-JS rendering for the Bastion Field Rig interface.
 // ============================================================
 
 const UI = (() => {
@@ -11,14 +10,22 @@ const UI = (() => {
     // ---- Previous state for change detection ----
     let prevState = null;
     let typewriterActive = false;
+    let finishActiveTypewriter = null;
 
-    // ---- NPC Avatar URLs (DiceBear pixel-art) ----
-    const AVATARS = {
-        narrator: "https://api.dicebear.com/9.x/bottts-neutral/svg?seed=oracle&backgroundColor=0a0a0a&eyes=bulging&mouth=smile01",
-        silas: "https://api.dicebear.com/9.x/adventurer/svg?seed=silas&backgroundColor=1a1a2e&hair=short04&skinColor=f2d3b1",
-        elara: "https://api.dicebear.com/9.x/adventurer/svg?seed=elara&backgroundColor=1a1a2e&hair=long19&skinColor=ecad80&hairColor=c18e5a",
-        player: "https://api.dicebear.com/9.x/adventurer/svg?seed=scrapper&backgroundColor=1a1a2e&hair=short11&skinColor=d08b5b"
+    const SPEAKERS = {
+        narrator: { name: "The Wastes", icon: "fa-scroll" },
+        silas: { name: "Silas", icon: "fa-hammer" },
+        elara: { name: "Elara", icon: "fa-staff-snake" }
     };
+
+    const preferences = {
+        textSpeed: Number(localStorage.getItem("tsw_text_speed") || 18),
+        textSize: localStorage.getItem("tsw_text_size") || "standard",
+        musicEnabled: localStorage.getItem("tsw_music_enabled") !== "false",
+        reducedMotion: localStorage.getItem("tsw_reduced_motion") === "true" || window.matchMedia("(prefers-reduced-motion: reduce)").matches
+    };
+    if (![0, 8, 18, 32].includes(preferences.textSpeed)) preferences.textSpeed = 18;
+    if (!["compact", "standard", "large"].includes(preferences.textSize)) preferences.textSize = "standard";
 
     function cacheDom() {
         dom.hpFill = document.getElementById("hp-fill");
@@ -28,6 +35,9 @@ const UI = (() => {
         dom.expFill = document.getElementById("exp-fill");
         dom.expValue = document.getElementById("exp-value");
         dom.levelBadge = document.getElementById("level-badge");
+        dom.playerAvatar = document.getElementById("player-avatar-image");
+        dom.playerName = document.getElementById("player-name");
+        dom.playerTitle = document.getElementById("player-title");
 
         dom.statStr = document.getElementById("stat-str");
         dom.statDef = document.getElementById("stat-def");
@@ -72,6 +82,12 @@ const UI = (() => {
         dom.statsModal = document.getElementById("statsModal");
         dom.inventoryModal = document.getElementById("inventoryModal");
         dom.saveModal = document.getElementById("saveModal");
+        dom.mapModal = document.getElementById("mapModal");
+        dom.settingsModal = document.getElementById("settingsModal");
+        dom.textSpeed = document.getElementById("setting-text-speed");
+        dom.textSize = document.getElementById("setting-text-size");
+        dom.musicEnabled = document.getElementById("setting-music-enabled");
+        dom.reducedMotion = document.getElementById("setting-reduced-motion");
 
         // V3 New DOM
         dom.bgMusic = document.getElementById("bg-music");
@@ -92,21 +108,31 @@ const UI = (() => {
 
     // ---- Update HUD with change detection ----
     function updateHUD(state) {
-        const hpPercent = (state.hp / state.maxHp) * 100;
+        const hpPercent = state.maxHp ? (state.hp / state.maxHp) * 100 : 0;
         dom.hpFill.style.width = hpPercent + "%";
         dom.hpValue.textContent = `${state.hp}/${state.maxHp}`;
+        dom.hpFill.parentElement.setAttribute("aria-valuenow", state.hp);
+        dom.hpFill.parentElement.setAttribute("aria-valuemax", state.maxHp);
 
         const hpGroup = document.querySelector(".bar-hp");
         hpGroup.classList.toggle("critical", hpPercent <= 25 && state.hp > 0);
 
-        const mpPercent = (state.mp / state.maxMp) * 100;
+        const mpPercent = state.maxMp ? (state.mp / state.maxMp) * 100 : 0;
         dom.mpFill.style.width = mpPercent + "%";
         dom.mpValue.textContent = `${state.mp}/${state.maxMp}`;
+        dom.mpFill.parentElement.setAttribute("aria-valuenow", state.mp);
+        dom.mpFill.parentElement.setAttribute("aria-valuemax", state.maxMp);
 
         const expPercent = (state.exp / state.expToLevel) * 100;
         dom.expFill.style.width = expPercent + "%";
         dom.expValue.textContent = `${state.exp}/${state.expToLevel}`;
+        dom.expFill.parentElement.setAttribute("aria-valuenow", state.exp);
+        dom.expFill.parentElement.setAttribute("aria-valuemax", state.expToLevel);
         dom.levelBadge.textContent = `Lv. ${state.level}`;
+
+        if (dom.playerName) dom.playerName.textContent = state.playerName;
+        if (dom.playerTitle) dom.playerTitle.textContent = `${state.buildId || "survivor"} · wastes survivor`;
+        if (dom.playerAvatar && state.playerAvatar) dom.playerAvatar.src = state.playerAvatar;
 
         updateStatWithFlash(dom.statStr, state.str);
         updateStatWithFlash(dom.statDef, state.def);
@@ -125,9 +151,12 @@ const UI = (() => {
         });
 
         dom.gameContainer.classList.toggle("combat-mode", state.combatActive);
+        document.body.dataset.gameState = state.combatActive ? "combat" : "exploration";
+        document.body.classList.toggle("critical-health", hpPercent <= 25 && state.hp > 0);
         updateStatsBadge(state.statPoints);
         updateQuickUseBar(state);
-        triggerAutoSave();
+        updateHotbar(state);
+        scheduleAutoSave(state);
 
         prevState = { ...state };
     }
@@ -196,23 +225,42 @@ const UI = (() => {
         return "narrator";
     }
 
-    // ---- Narrative Messages with Typewriter + Avatars ----
+    function sanitizeNarrative(html) {
+        if (window.DOMPurify) {
+            return window.DOMPurify.sanitize(String(html), {
+                ALLOWED_TAGS: ["strong", "em", "span", "br", "p"],
+                ALLOWED_ATTR: []
+            });
+        }
+
+        const fallback = document.createElement("div");
+        fallback.textContent = String(html);
+        return fallback.innerHTML;
+    }
+
+    // ---- Narrative Messages with Typewriter + Local Identity ----
     function addNarrative(html, type, speaker) {
         const msgDiv = document.createElement("div");
         msgDiv.className = `narrative-message message-${type === "gm" ? "gm" : "player"} message-new`;
 
-        // Determine avatar
-        let avatarKey = type === "gm" ? (speaker || detectSpeaker(html)) : "player";
-        const avatarUrl = AVATARS[avatarKey] || AVATARS.narrator;
-        const senderName = type === "gm" ? "The Wastes" : "You";
-        const senderIcon = type === "gm" ? "fa-scroll" : "";
-
         const senderDiv = document.createElement("div");
         senderDiv.className = "message-sender";
-        senderDiv.innerHTML = `
-            <img class="message-avatar" src="${avatarUrl}" alt="${senderName}" loading="lazy">
-            ${senderIcon ? `<i class="fa-solid ${senderIcon}"></i>` : ""} ${senderName}
-        `;
+        if (type === "gm") {
+            const speakerKey = speaker || detectSpeaker(html);
+            const speakerMeta = SPEAKERS[speakerKey] || SPEAKERS.narrator;
+            const sigil = document.createElement("span");
+            sigil.className = `message-sigil sigil-${speakerKey}`;
+            sigil.setAttribute("aria-hidden", "true");
+            sigil.innerHTML = `<i class="fa-solid ${speakerMeta.icon}"></i>`;
+            senderDiv.append(sigil, document.createTextNode(speakerMeta.name));
+        } else {
+            const playerState = GameEngine.getState();
+            const avatar = document.createElement("img");
+            avatar.className = "message-avatar";
+            avatar.src = playerState.playerAvatar || "img/avatar_survivor.png";
+            avatar.alt = "";
+            senderDiv.append(avatar, document.createTextNode(playerState.playerName || "You"));
+        }
 
         const contentDiv = document.createElement("div");
         contentDiv.className = "message-content";
@@ -223,10 +271,13 @@ const UI = (() => {
 
         setTimeout(() => msgDiv.classList.remove("message-new"), 1500);
 
-        if (type === "gm" && html.length < 800) {
-            typewriteHTML(contentDiv, html);
+        const safeHtml = type === "gm" ? sanitizeNarrative(html) : null;
+        if (type === "gm" && String(html).length < 800 && !preferences.reducedMotion && preferences.textSpeed > 0) {
+            typewriteHTML(contentDiv, safeHtml);
+        } else if (type === "gm") {
+            contentDiv.innerHTML = safeHtml;
         } else {
-            contentDiv.innerHTML = html;
+            contentDiv.textContent = String(html);
         }
 
         requestAnimationFrame(() => {
@@ -236,6 +287,7 @@ const UI = (() => {
 
     // ---- Typewriter HTML ----
     function typewriteHTML(container, html) {
+        if (finishActiveTypewriter) finishActiveTypewriter();
         typewriterActive = true;
         container.innerHTML = '';
 
@@ -247,7 +299,22 @@ const UI = (() => {
         const fullText = temp.textContent || temp.innerText;
 
         let index = 0;
-        const speed = 18;
+        const speed = preferences.textSpeed;
+        let timerId = null;
+        let finished = false;
+
+        function finish() {
+            if (finished) return;
+            finished = true;
+            clearTimeout(timerId);
+            cursor.remove();
+            container.innerHTML = sanitizeNarrative(html);
+            typewriterActive = false;
+            finishActiveTypewriter = null;
+            dom.narrativeContainer.scrollTop = dom.narrativeContainer.scrollHeight;
+        }
+
+        finishActiveTypewriter = finish;
 
         function typeNext() {
             if (index < fullText.length) {
@@ -255,12 +322,9 @@ const UI = (() => {
                 container.appendChild(cursor);
                 index++;
                 dom.narrativeContainer.scrollTop = dom.narrativeContainer.scrollHeight;
-                setTimeout(typeNext, speed);
+                timerId = setTimeout(typeNext, speed);
             } else {
-                cursor.remove();
-                container.innerHTML = html;
-                typewriterActive = false;
-                dom.narrativeContainer.scrollTop = dom.narrativeContainer.scrollHeight;
+                finish();
             }
         }
 
@@ -341,6 +405,60 @@ const UI = (() => {
         dom.turnIndicator.classList.remove("active");
     }
 
+    // ---- Ability Hotbar ----
+    function updateHotbar(state) {
+        const hotbar = document.getElementById("ability-hotbar");
+        if (!hotbar) return;
+
+        if (!state.combatActive) {
+            hotbar.classList.remove("active");
+            return;
+        }
+
+        hotbar.classList.add("active");
+        hotbar.innerHTML = "";
+
+        // Standard test loadout (can be expanded later if skills depend on class)
+        const availableAbilities = ["strike", "heavy_blow", "mana_bolt", "first_aid", "guard"];
+
+        availableAbilities.forEach(abilityId => {
+            const ability = ABILITIES[abilityId];
+            if (!ability) return;
+
+            const currentCd = state.cooldowns ? state.cooldowns[abilityId] || 0 : 0;
+            const canAfford = state.mp >= ability.mpCost;
+            const isReady = currentCd <= 0 && canAfford && !state.combatResolving;
+
+            const el = document.createElement("button");
+            el.className = `hotbar-btn ${isReady ? "" : "disabled"}`;
+            el.type = "button";
+            el.disabled = !isReady;
+            el.setAttribute("aria-label", `${ability.name}. ${ability.description}${ability.mpCost ? `. Costs ${ability.mpCost} mana.` : ""}`);
+            if (currentCd > 0) el.classList.add("on-cooldown");
+
+            el.innerHTML = `
+                <i class="fa-solid ${ability.icon}"></i>
+                <span class="hotbar-btn-name">${ability.name}</span>
+                ${ability.mpCost > 0 ? `<span class="hotbar-btn-mp">${ability.mpCost} MP</span>` : ""}
+                ${currentCd > 0 ? `<div class="cooldown-overlay">${currentCd}</div>` : ""}
+            `;
+
+            el.addEventListener("pointerenter", (e) => showGameTooltip(ability, e, true));
+            el.addEventListener("pointerleave", hideGameTooltip);
+            el.addEventListener("pointermove", moveGameTooltip);
+
+            if (isReady) {
+                el.addEventListener("click", () => {
+                    triggerButtonGlow(el);
+                    hideGameTooltip();
+                    GameEngine.useAbility(abilityId);
+                });
+            }
+
+            hotbar.appendChild(el);
+        });
+    }
+
     // ---- Quick-Use Consumable Bar ----
     function updateQuickUseBar(state) {
         const bar = dom.quickUseBar;
@@ -361,8 +479,10 @@ const UI = (() => {
 
         consumables.forEach(slot => {
             const item = ITEMS[slot.id];
-            const el = document.createElement("div");
+            const el = document.createElement("button");
+            el.type = "button";
             el.className = "quick-use-item";
+            el.setAttribute("aria-label", `Use ${item.name}. ${slot.qty} remaining.`);
             el.innerHTML = `
                 <i class="fa-solid ${item.icon}" style="color: ${item.iconColor}"></i>
                 ${item.name}
@@ -389,8 +509,8 @@ const UI = (() => {
         indicator.id = "typing-indicator";
         indicator.innerHTML = `
             <div class="message-sender">
-                <img class="message-avatar" src="${AVATARS.narrator}" alt="Narrator" loading="lazy">
-                <i class="fa-solid fa-scroll"></i> The Wastes
+                <span class="message-sigil sigil-narrator" aria-hidden="true"><i class="fa-solid fa-scroll"></i></span>
+                The Wastes
             </div>
             <div class="typing-indicator">
                 <div class="typing-dot"></div>
@@ -503,12 +623,15 @@ const UI = (() => {
 
     // ---- Stats Modal ----
     function openStatsModal() {
-        updateStatsModal(GameEngine.getState());
+        const state = GameEngine.getState();
+        const derived = GameEngine.getDerivedStats();
+        updateStatsModal(state, derived);
         const modal = new bootstrap.Modal(dom.statsModal);
         modal.show();
     }
 
-    function updateStatsModal(state) {
+    function updateStatsModal(state, derived) {
+        // Base Stats (Left Column)
         document.getElementById("modal-stat-points").textContent = state.statPoints;
         document.getElementById("modal-str").textContent = state.str;
         document.getElementById("modal-def").textContent = state.def;
@@ -517,6 +640,17 @@ const UI = (() => {
 
         const btns = document.querySelectorAll(".stat-upgrade-btn");
         btns.forEach(btn => { btn.disabled = state.statPoints <= 0; });
+
+        // Derived Stats (Right Column)
+        if (derived) {
+            document.getElementById("derived-hp").textContent = derived.maxHp;
+            document.getElementById("derived-mp").textContent = derived.maxMp;
+            document.getElementById("derived-atk").textContent = `${derived.atkMin} - ${derived.atkMax}`;
+            document.getElementById("derived-dr").textContent = `${derived.drPercent.toFixed(1)}%`;
+            document.getElementById("derived-matk").textContent = `${derived.matkMin} - ${derived.matkMax}`;
+            document.getElementById("derived-crit").textContent = `${(derived.critChance * 100).toFixed(1)}%`;
+            document.getElementById("derived-evade").textContent = `${(derived.evadeChance * 100).toFixed(1)}%`;
+        }
     }
 
     // ---- Inventory Modal ----
@@ -527,29 +661,65 @@ const UI = (() => {
     }
 
     function updateInventoryModal(state) {
+        const pdGrid = document.getElementById("paper-doll-grid");
+        if (pdGrid) {
+            pdGrid.innerHTML = "";
+            const slots = [
+                { id: "head", icon: "fa-crown", label: "Head" },
+                { id: "chest", icon: "fa-shirt", label: "Chest" },
+                { id: "main_hand", icon: "fa-hand-fist", label: "Main Hand" },
+                { id: "off_hand", icon: "fa-shield", label: "Off Hand" },
+                { id: "accessory", icon: "fa-ring", label: "Accessory" }
+            ];
+
+            slots.forEach(s => {
+                const itemId = state.equipment[s.id];
+                const item = itemId ? ITEMS[itemId] : null;
+
+                const div = document.createElement(item ? "button" : "div");
+                div.className = "pd-slot " + (item ? "filled" : "");
+                div.dataset.slot = s.id;
+
+                if (item) {
+                    div.type = "button";
+                    div.setAttribute("aria-label", `Unequip ${item.name} from ${s.label}`);
+                    div.innerHTML = `
+                        <i class="fa-solid ${item.icon}" style="color: ${item.iconColor}"></i>
+                        <div class="pd-slot-name">${item.name}</div>
+                    `;
+                    div.style.borderColor = getRarityColor(item.rarity);
+                    div.addEventListener("pointerenter", (e) => showGameTooltip(item, e));
+                    div.addEventListener("pointerleave", hideGameTooltip);
+                    div.addEventListener("pointermove", moveGameTooltip);
+                    div.addEventListener("click", () => {
+                        GameEngine.unequipItem(s.id);
+                        hideGameTooltip();
+                    });
+                } else {
+                    div.innerHTML = `<i class="fa-solid ${s.icon}"></i><div class="pd-slot-name">${s.label}</div>`;
+                }
+                pdGrid.appendChild(div);
+            });
+        }
+
         const grid = document.getElementById("inventory-grid");
+        if (!grid) return;
         grid.innerHTML = "";
 
-        const weapon = ITEMS[state.weapon];
-        const armor = ITEMS[state.armor];
-        document.getElementById("equipped-weapon-icon").className = `fa-solid ${weapon.icon}`;
-        document.getElementById("equipped-weapon-icon").style.color = weapon.iconColor;
-        document.getElementById("equipped-weapon-name").textContent = weapon.name;
-        document.getElementById("equipped-armor-icon").className = `fa-solid ${armor.icon}`;
-        document.getElementById("equipped-armor-icon").style.color = armor.iconColor;
-        document.getElementById("equipped-armor-name").textContent = armor.name;
-
-        const invItems = state.inventory.filter(i => i.id !== state.weapon && i.id !== state.armor);
+        const invItems = state.inventory;
 
         invItems.forEach(slot => {
             const item = ITEMS[slot.id];
             if (!item) return;
 
-            const rarity = item.type === "quest" ? "rarity-legendary" :
-                item.type === "valuable" && item.sellPrice && item.sellPrice.min >= 10 ? "rarity-rare" :
-                    item.type === "consumable" ? "rarity-uncommon" : "rarity-common";
-            const div = document.createElement("div");
-            div.className = `inventory-slot ${rarity}`;
+            const rarityClass = item.rarity ? `rarity-${item.rarity}` : "rarity-common";
+            const isActionable = item.type === "consumable" || item.type === "equipment";
+            const div = document.createElement(isActionable ? "button" : "div");
+            div.className = `inventory-slot ${rarityClass}`;
+            if (isActionable) {
+                div.type = "button";
+                div.setAttribute("aria-label", `${item.type === "consumable" ? "Use" : "Equip"} ${item.name}${slot.qty > 1 ? `, quantity ${slot.qty}` : ""}`);
+            }
             div.innerHTML = `
                 <i class="fa-solid ${item.icon}" style="color: ${item.iconColor}"></i>
                 <div class="inventory-slot-name">${item.name}</div>
@@ -564,6 +734,14 @@ const UI = (() => {
                 div.addEventListener("click", () => {
                     triggerButtonGlow(div);
                     GameEngine.useItem(slot.id);
+                    hideGameTooltip();
+                });
+                div.style.cursor = "pointer";
+            } else if (item.type === "equipment") {
+                div.addEventListener("click", () => {
+                    triggerButtonGlow(div);
+                    GameEngine.equipItem(slot.id);
+                    hideGameTooltip();
                 });
                 div.style.cursor = "pointer";
             }
@@ -580,11 +758,21 @@ const UI = (() => {
         }
     }
 
+    function getRarityColor(rarity) {
+        switch (rarity) {
+            case 'common': return '#6c757d';
+            case 'uncommon': return '#00f5d4';
+            case 'rare': return '#ffd700';
+            case 'legendary': return '#ff0054';
+            default: return 'var(--border-subtle)';
+        }
+    }
+
     // ---- Game Tooltip System (FIXED persistence bug) ----
     let activeTooltip = null;
     let tooltipCleanupInterval = null;
 
-    function showGameTooltip(item, event) {
+    function showGameTooltip(itemOrAbility, event, isAbility = false) {
         hideGameTooltip();
 
         const tip = document.createElement("div");
@@ -592,25 +780,78 @@ const UI = (() => {
         tip.id = "active-game-tooltip";
 
         let statLine = "";
-        if (item.effect) {
-            if (item.effect.hp) statLine += `<div class="game-tooltip-stat">❤️ Restores ${item.effect.hp} HP</div>`;
-            if (item.effect.mp) statLine += `<div class="game-tooltip-stat">💧 Restores ${item.effect.mp} MP</div>`;
-        }
-        if (item.bonusStat) {
-            Object.entries(item.bonusStat).forEach(([k, v]) => {
-                statLine += `<div class="game-tooltip-stat">⚔️ +${v} ${k.toUpperCase()}</div>`;
-            });
-        }
-        if (item.cost) statLine += `<div class="game-tooltip-stat">💰 Cost: ${item.cost} coins</div>`;
-        if (item.sellPrice) statLine += `<div class="game-tooltip-stat">💰 Sell: ${item.sellPrice.min}-${item.sellPrice.max} coins</div>`;
 
-        const typeLabel = item.type.charAt(0).toUpperCase() + item.type.slice(1);
+        if (isAbility) {
+            if (itemOrAbility.mpCost > 0) statLine += `<div class="game-tooltip-stat">💧 Cost: ${itemOrAbility.mpCost} MP</div>`;
+            if (itemOrAbility.cooldown > 0) statLine += `<div class="game-tooltip-stat">⏳ Cooldown: ${itemOrAbility.cooldown} Turns</div>`;
+            if (itemOrAbility.multiplier) statLine += `<div class="game-tooltip-stat">⚔️ Power: ${itemOrAbility.multiplier * 100}% ${itemOrAbility.type}</div>`;
+            if (itemOrAbility.healAmount) statLine += `<div class="game-tooltip-stat">❤️ Heals: ${itemOrAbility.healAmount} HP</div>`;
 
-        tip.innerHTML = `
-            <div class="game-tooltip-title">${item.name} <small style="color:var(--text-muted);font-family:var(--font-mono);font-size:0.7rem;">[${typeLabel}]</small></div>
-            <div class="game-tooltip-desc">${item.description}</div>
-            ${statLine}
-        `;
+            tip.innerHTML = `
+                <div class="game-tooltip-title">${itemOrAbility.name} <small style="color:var(--text-muted);font-family:var(--font-mono);font-size:0.7rem;">[Ability]</small></div>
+                <div class="game-tooltip-desc">${itemOrAbility.description}</div>
+                <div class="game-tooltip-stats-container" style="margin-top: 10px;">${statLine}</div>
+            `;
+        } else {
+            const item = itemOrAbility;
+            // Stat Comparison Logic for Equipment
+            if (item.type === "equipment" && item.equipSlot) {
+                const state = GameEngine.getState();
+                const equippedId = state.equipment[item.equipSlot];
+                const equippedItem = equippedId ? ITEMS[equippedId] : null;
+
+                if (item.bonusStat) {
+                    Object.entries(item.bonusStat).forEach(([k, v]) => {
+                        let diffFormatted = "";
+                        if (equippedItem && equippedItem.bonusStat) {
+                            const eqVal = equippedItem.bonusStat[k] || 0;
+                            const diff = v - eqVal;
+                            if (diff > 0) diffFormatted = ` <span class="text-success">(+${diff})</span>`;
+                            else if (diff < 0) diffFormatted = ` <span class="text-danger">(${diff})</span>`;
+                        } else if (equippedItem && !equippedItem.bonusStat) {
+                            diffFormatted = ` <span class="text-success">(+${v})</span>`;
+                        } else if (!equippedItem) {
+                            diffFormatted = ` <span class="text-success">(+${v})</span>`;
+                        }
+                        statLine += `<div class="game-tooltip-stat">⚔️ +${v} ${k.toUpperCase()}${diffFormatted}</div>`;
+                    });
+                }
+
+                if (equippedItem && equippedItem.bonusStat) {
+                    // Check if equipped item has stats this new item doesn't
+                    Object.entries(equippedItem.bonusStat).forEach(([k, eqVal]) => {
+                        if (!item.bonusStat || item.bonusStat[k] === undefined) {
+                            statLine += `<div class="game-tooltip-stat">⚔️ 0 ${k.toUpperCase()} <span class="text-danger">(-${eqVal})</span></div>`;
+                        }
+                    });
+                }
+
+                if (equippedItem && equippedItem.id !== item.id) {
+                    statLine += `<div class="game-tooltip-compare" style="margin-top: 8px; border-top: 1px solid rgba(255,255,255,0.1); padding-top: 5px;"><small class="text-muted">Equipped: ${equippedItem.name}</small></div>`;
+                }
+            } else {
+                if (item.effect) {
+                    if (item.effect.hp) statLine += `<div class="game-tooltip-stat">❤️ Restores ${item.effect.hp} HP</div>`;
+                    if (item.effect.mp) statLine += `<div class="game-tooltip-stat">💧 Restores ${item.effect.mp} MP</div>`;
+                }
+                if (item.bonusStat) {
+                    Object.entries(item.bonusStat).forEach(([k, v]) => {
+                        statLine += `<div class="game-tooltip-stat">⚔️ +${v} ${k.toUpperCase()}</div>`;
+                    });
+                }
+            }
+
+            if (item.cost) statLine += `<div class="game-tooltip-stat">💰 Cost: ${item.cost} coins</div>`;
+            if (item.sellPrice) statLine += `<div class="game-tooltip-stat">💰 Sell: ${item.sellPrice.min}-${item.sellPrice.max} coins</div>`;
+
+            const typeLabel = item.type.charAt(0).toUpperCase() + item.type.slice(1);
+
+            tip.innerHTML = `
+                <div class="game-tooltip-title">${item.name} <small style="color:var(--text-muted);font-family:var(--font-mono);font-size:0.7rem;">[${typeLabel}]</small></div>
+                <div class="game-tooltip-desc">${item.description}</div>
+                <div class="game-tooltip-stats-container" style="margin-top: 10px;">${statLine}</div>
+            `;
+        }
 
         document.body.appendChild(tip);
         activeTooltip = tip;
@@ -686,14 +927,16 @@ const UI = (() => {
         });
     }
 
-    // ---- Auto-Save Indicator ----
+    // ---- Debounced Auto-Save ----
     let autoSaveTimeout = null;
-    function triggerAutoSave() {
-        dom.autoSaveIndicator.classList.add("visible");
+    function scheduleAutoSave(state) {
+        if (!state.gameStarted) return;
         clearTimeout(autoSaveTimeout);
         autoSaveTimeout = setTimeout(() => {
-            dom.autoSaveIndicator.classList.remove("visible");
-        }, 1500);
+            if (!GameEngine.autoSave()) return;
+            dom.autoSaveIndicator.classList.add("visible");
+            setTimeout(() => dom.autoSaveIndicator.classList.remove("visible"), 1300);
+        }, 700);
     }
 
     // ---- Save / Load Modal ----
@@ -703,54 +946,114 @@ const UI = (() => {
         modal.show();
     }
 
+    function openMapModal() {
+        const currentRegion = GameEngine.getState().currentRegion;
+        document.querySelectorAll("[data-map-region]").forEach(region => {
+            const isCurrent = region.dataset.mapRegion === currentRegion;
+            region.classList.toggle("current", isCurrent);
+            if (isCurrent) region.setAttribute("aria-current", "location");
+            else region.removeAttribute("aria-current");
+        });
+        bootstrap.Modal.getOrCreateInstance(dom.mapModal).show();
+    }
+
+    function openSettingsModal() {
+        if (dom.textSpeed) dom.textSpeed.value = String(preferences.textSpeed);
+        if (dom.textSize) dom.textSize.value = preferences.textSize;
+        if (dom.musicEnabled) dom.musicEnabled.checked = preferences.musicEnabled;
+        if (dom.reducedMotion) dom.reducedMotion.checked = preferences.reducedMotion;
+        bootstrap.Modal.getOrCreateInstance(dom.settingsModal).show();
+    }
+
+    function applyMotionPreference() {
+        document.documentElement.classList.toggle("reduce-motion", preferences.reducedMotion);
+        ParticleEngine.setPaused(preferences.reducedMotion);
+    }
+
+    function applyTextSizePreference() {
+        document.documentElement.dataset.textSize = preferences.textSize;
+    }
+
+    function updateMusicControls(playing) {
+        dom.musicIcon.classList.toggle("fa-volume-high", playing);
+        dom.musicIcon.classList.toggle("fa-volume-xmark", !playing);
+        dom.musicIcon.style.color = playing ? "var(--teal)" : "";
+        dom.musicToggle.setAttribute("aria-pressed", String(playing));
+        if (dom.musicEnabled) dom.musicEnabled.checked = preferences.musicEnabled;
+    }
+
+    function setMusicEnabled(enabled) {
+        preferences.musicEnabled = enabled;
+        localStorage.setItem("tsw_music_enabled", String(enabled));
+        if (!enabled) {
+            dom.bgMusic.pause();
+            updateMusicControls(false);
+            return;
+        }
+
+        dom.bgMusic.volume = 0.3;
+        dom.bgMusic.play().then(() => updateMusicControls(true)).catch(() => updateMusicControls(false));
+    }
+
+    function resetNarrative() {
+        if (finishActiveTypewriter) finishActiveTypewriter();
+        typewriterActive = false;
+        dom.narrativeContainer.innerHTML = "";
+        dom.choicesContainer.innerHTML = "";
+        hideTypingIndicator();
+        hideTurnIndicator();
+        hideEnemyPanel();
+    }
+
     function updateSaveModal() {
         const container = document.getElementById("save-slots-container");
         if (!container) return;
 
         const slots = GameEngine.getSaveSlots();
+        const gameStarted = GameEngine.getState().gameStarted;
         container.innerHTML = "";
 
         slots.forEach(slot => {
             const div = document.createElement("div");
-            div.className = `save-slot ${slot.filled ? "" : "save-slot-empty"}`;
+            div.className = `save-slot ${slot.filled ? "" : "save-slot-empty"} ${slot.corrupt ? "save-slot-corrupt" : ""}`;
 
             if (slot.filled) {
                 const timeLabel = TIME_PHASES[slot.timePhase] || "Unknown";
                 const dateStr = new Date(slot.timestamp).toLocaleDateString() + " " + new Date(slot.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+                const slotTitle = slot.id === "auto" ? "Autosave" : `Slot ${slot.id}`;
 
                 div.innerHTML = `
                     <div class="save-slot-left">
-                        <div class="save-slot-number">${slot.id}</div>
+                        <div class="save-slot-number">${slotTitle}</div>
                         <div class="save-slot-info">
-                            <div class="save-slot-title">The Scrapper — Lv.${slot.level}</div>
+                            <div class="save-slot-title"></div>
                             <div class="save-slot-details">Day ${slot.day} • ${timeLabel} • ${slot.coins} coins • Saved: ${dateStr}</div>
                         </div>
                     </div>
                     <div class="save-slot-actions">
-                        <button class="save-action-btn" title="Load Game" data-load="${slot.id}">
+                        <button class="save-action-btn" aria-label="Load ${slotTitle}" title="Load Game" data-load="${slot.id}">
                             <i class="fa-solid fa-upload"></i>
                         </button>
-                        <button class="save-action-btn" title="Overwrite Save" data-save="${slot.id}">
-                            <i class="fa-solid fa-floppy-disk"></i>
-                        </button>
-                        <button class="save-action-btn delete" title="Delete Save" data-delete="${slot.id}">
+                        ${slot.id !== "auto" && gameStarted ? `<button class="save-action-btn" aria-label="Overwrite ${slotTitle}" title="Overwrite Save" data-save="${slot.id}"><i class="fa-solid fa-floppy-disk"></i></button>` : ""}
+                        <button class="save-action-btn delete" aria-label="Delete ${slotTitle}" title="Delete Save" data-delete="${slot.id}">
                             <i class="fa-solid fa-trash"></i>
                         </button>
                     </div>
                 `;
+                div.querySelector(".save-slot-title").textContent = `${slot.playerName} — Lv.${slot.level} · ${slot.buildId}`;
             } else {
+                const slotTitle = slot.id === "auto" ? "Autosave" : `Slot ${slot.id}`;
                 div.innerHTML = `
                     <div class="save-slot-left">
-                        <div class="save-slot-number">${slot.id}</div>
+                        <div class="save-slot-number">${slotTitle}</div>
                         <div class="save-slot-info">
-                            <div class="save-slot-title">— Empty Slot —</div>
-                            <div class="save-slot-details">No saved game</div>
+                            <div class="save-slot-title">${slot.corrupt ? "Unreadable field record" : "Empty field record"}</div>
+                            <div class="save-slot-details">${slot.corrupt ? "Delete this record before reusing it." : "No saved game"}</div>
                         </div>
                     </div>
                     <div class="save-slot-actions">
-                        <button class="save-action-btn" title="Save Here" data-save="${slot.id}">
-                            <i class="fa-solid fa-floppy-disk"></i>
-                        </button>
+                        ${slot.id !== "auto" && gameStarted ? `<button class="save-action-btn" aria-label="Save to ${slotTitle}" title="Save Here" data-save="${slot.id}"><i class="fa-solid fa-floppy-disk"></i></button>` : ""}
+                        ${slot.corrupt ? `<button class="save-action-btn delete" aria-label="Delete ${slotTitle}" data-delete="${slot.id}"><i class="fa-solid fa-trash"></i></button>` : ""}
                     </div>
                 `;
             }
@@ -762,7 +1065,7 @@ const UI = (() => {
             btn.addEventListener("click", (e) => {
                 e.stopPropagation();
                 triggerButtonGlow(btn);
-                GameEngine.saveGame(parseInt(btn.dataset.save));
+                GameEngine.saveGame(Number(btn.dataset.save));
             });
         });
 
@@ -770,15 +1073,32 @@ const UI = (() => {
             btn.addEventListener("click", (e) => {
                 e.stopPropagation();
                 triggerButtonGlow(btn);
-                GameEngine.loadGame(parseInt(btn.dataset.load));
-                bootstrap.Modal.getInstance(dom.saveModal).hide();
+                const slotId = btn.dataset.load === "auto" ? "auto" : Number(btn.dataset.load);
+                if (GameEngine.loadGame(slotId)) bootstrap.Modal.getInstance(dom.saveModal).hide();
             });
         });
 
         container.querySelectorAll("[data-delete]").forEach(btn => {
             btn.addEventListener("click", (e) => {
                 e.stopPropagation();
-                GameEngine.deleteSave(parseInt(btn.dataset.delete));
+                const slotId = btn.dataset.delete === "auto" ? "auto" : Number(btn.dataset.delete);
+                if (btn.dataset.confirmDelete === "true") {
+                    GameEngine.deleteSave(slotId);
+                    return;
+                }
+
+                btn.dataset.confirmDelete = "true";
+                btn.classList.add("confirm-delete");
+                btn.title = "Click again to confirm deletion";
+                btn.setAttribute("aria-label", `Confirm deletion of ${slotId === "auto" ? "autosave" : `slot ${slotId}`}`);
+                btn.innerHTML = '<i class="fa-solid fa-check"></i>';
+                setTimeout(() => {
+                    if (!btn.isConnected) return;
+                    btn.dataset.confirmDelete = "false";
+                    btn.classList.remove("confirm-delete");
+                    btn.title = "Delete Save";
+                    btn.innerHTML = '<i class="fa-solid fa-trash"></i>';
+                }, 3000);
             });
         });
     }
@@ -788,6 +1108,7 @@ const UI = (() => {
         document.addEventListener("keydown", (e) => {
             if (document.activeElement === dom.customInput) return;
             if (document.querySelector(".modal.show")) return;
+            if (!GameEngine.getState().gameStarted) return;
 
             switch (e.key) {
                 case "1": case "2": case "3": case "4":
@@ -857,6 +1178,17 @@ const UI = (() => {
             if (e.key === "Enter") dom.sendBtn.click();
         });
 
+        dom.narrativeContainer.addEventListener("click", () => {
+            if (finishActiveTypewriter) finishActiveTypewriter();
+        });
+
+        dom.narrativeContainer.addEventListener("keydown", (e) => {
+            if (finishActiveTypewriter && (e.key === "Enter" || e.key === " ")) {
+                e.preventDefault();
+                finishActiveTypewriter();
+            }
+        });
+
         document.querySelectorAll(".stat-upgrade-btn").forEach(btn => {
             btn.addEventListener("click", () => {
                 triggerButtonGlow(btn);
@@ -876,13 +1208,38 @@ const UI = (() => {
         document.getElementById("btn-stats").addEventListener("click", openStatsModal);
         document.getElementById("btn-inventory").addEventListener("click", openInventoryModal);
         document.getElementById("btn-save").addEventListener("click", openSaveModal);
-        document.getElementById("btn-map").addEventListener("click", () => {
-            showToast("Map coming in Phase 2!", "warning", "fa-map");
-        });
-        document.getElementById("btn-settings").addEventListener("click", () => {
-            showToast("Settings coming soon!", "warning", "fa-gear");
-        });
+        document.getElementById("btn-map").addEventListener("click", openMapModal);
+        document.getElementById("btn-settings").addEventListener("click", openSettingsModal);
 
+        if (dom.textSpeed) {
+            dom.textSpeed.addEventListener("change", () => {
+                preferences.textSpeed = Number(dom.textSpeed.value);
+                localStorage.setItem("tsw_text_speed", String(preferences.textSpeed));
+            });
+        }
+
+        if (dom.textSize) {
+            dom.textSize.addEventListener("change", () => {
+                preferences.textSize = dom.textSize.value;
+                localStorage.setItem("tsw_text_size", preferences.textSize);
+                applyTextSizePreference();
+            });
+        }
+
+        if (dom.musicEnabled) {
+            dom.musicEnabled.addEventListener("change", () => setMusicEnabled(dom.musicEnabled.checked));
+        }
+
+        if (dom.reducedMotion) {
+            dom.reducedMotion.addEventListener("change", () => {
+                preferences.reducedMotion = dom.reducedMotion.checked;
+                localStorage.setItem("tsw_reduced_motion", String(preferences.reducedMotion));
+                applyMotionPreference();
+            });
+        }
+
+        applyMotionPreference();
+        applyTextSizePreference();
         initKeyboardShortcuts();
         initStatTooltips();
         initGlobalTooltipCleanup();
@@ -898,32 +1255,64 @@ const UI = (() => {
         { speaker: "Silas", text: "Hey! You! Over here, before the Ash Hounds see you!" }
     ];
     let vnStep = 0;
+    let finishVnLine = null;
 
     const BUILDS = [
-        { id: "bruiser", name: "Bruiser", stats: { maxHp: 65, maxMp: 20, str: 7, def: 4, int: 2, agi: 3 }, avatar: "img/avatar_bruiser.png" },
-        { id: "scout", name: "Scout", stats: { maxHp: 45, maxMp: 25, str: 4, def: 3, int: 3, agi: 7 }, avatar: "img/avatar_scout.png" },
-        { id: "scholar", name: "Scholar", stats: { maxHp: 40, maxMp: 45, str: 2, def: 2, int: 8, agi: 4 }, avatar: "img/avatar_scholar.png" },
-        { id: "vanguard", name: "Vanguard", stats: { maxHp: 60, maxMp: 20, str: 4, def: 7, int: 3, agi: 2 }, avatar: "img/avatar_vanguard.png" },
-        { id: "survivor", name: "Survivor", stats: { maxHp: 50, maxMp: 30, str: 5, def: 5, int: 5, agi: 5 }, avatar: "img/avatar_survivor.png" }
+        {
+            id: "bruiser", name: "Bruiser", stats: { maxHp: 65, maxMp: 20, str: 7, def: 4, int: 2, agi: 3 }, avatar: "img/avatar_bruiser.png",
+            description: "<strong>The Bruiser</strong> relies on raw Physical Attack and high Maximum HP. They excel at crushing foes quickly but lack evasion and magical aptitude."
+        },
+        {
+            id: "scout", name: "Scout", stats: { maxHp: 45, maxMp: 25, str: 4, def: 3, int: 3, agi: 7 }, avatar: "img/avatar_scout.png",
+            description: "<strong>The Scout</strong> prioritizes Agility, leading to high Critical Hit and Evasion rates. They are fragile but can completely avoid incoming attacks."
+        },
+        {
+            id: "scholar", name: "Scholar", stats: { maxHp: 40, maxMp: 45, str: 2, def: 2, int: 8, agi: 4 }, avatar: "img/avatar_scholar.png",
+            description: "<strong>The Scholar</strong> focuses on Intelligence, granting the deepest Mana pool and the strongest magical attacks."
+        },
+        {
+            id: "vanguard", name: "Vanguard", stats: { maxHp: 60, maxMp: 20, str: 4, def: 7, int: 3, agi: 2 }, avatar: "img/avatar_vanguard.png",
+            description: "<strong>The Vanguard</strong> is an iron fortress. With massive base Defense, they passively reduce all incoming physical damage by a significant percentage."
+        },
+        {
+            id: "survivor", name: "Survivor", stats: { maxHp: 50, maxMp: 30, str: 5, def: 5, int: 5, agi: 5 }, avatar: "img/avatar_survivor.png",
+            description: "<strong>The Survivor</strong> is perfectly balanced across all stats. A versatile scrapper capable of adapting to any combat situation in the Wastes."
+        }
     ];
     let selectedBuild = null;
 
     function initV3Systems() {
-        // Audio Toggle
+        // --- Audio Autoplay Setup ---
+        let audioStarted = false;
+        const initiateAudio = () => {
+            if (audioStarted || !dom.bgMusic || !preferences.musicEnabled) return;
+            const playPromise = dom.bgMusic.play();
+            if (playPromise !== undefined) {
+                playPromise.then(() => {
+                    dom.bgMusic.volume = 0.3;
+                    updateMusicControls(true);
+                    audioStarted = true;
+                }).catch(() => updateMusicControls(false));
+            }
+            // Remove listeners after first interaction
+            document.removeEventListener("pointerdown", initiateAudio);
+            document.removeEventListener("keydown", initiateAudio);
+        };
+        document.addEventListener("pointerdown", initiateAudio);
+        document.addEventListener("keydown", initiateAudio);
+
+        // Audio Toggle Button
         if (dom.musicToggle) {
-            dom.musicToggle.addEventListener("click", () => {
+            dom.musicToggle.addEventListener("click", (e) => {
+                e.stopPropagation(); // Prevent trigger by the global listener above if it hasn't fired
                 const audio = dom.bgMusic;
                 if (!audio) return;
 
                 if (audio.paused) {
-                    audio.volume = 0.3; // BG music nice and low
-                    audio.play().catch(e => console.log("Audio play blocked by browser"));
-                    dom.musicIcon.classList.replace("fa-volume-xmark", "fa-volume-high");
-                    dom.musicIcon.style.color = "var(--teal)";
+                    setMusicEnabled(true);
+                    audioStarted = true;
                 } else {
-                    audio.pause();
-                    dom.musicIcon.classList.replace("fa-volume-high", "fa-volume-xmark");
-                    dom.musicIcon.style.color = "";
+                    setMusicEnabled(false);
                 }
             });
         }
@@ -936,13 +1325,11 @@ const UI = (() => {
                 startVNIntro();
             });
         }
+
         if (dom.btnLoadGame) {
             dom.btnLoadGame.addEventListener("click", () => {
-                dom.mainMenuScreen.classList.remove("active");
-                dom.mainMenuScreen.style.display = "none";
-                dom.gameContainer.style.display = "flex";
-
-                // Show load modal automatically
+                // Keep the Main Menu screen active and visible.
+                // Only show the load modal on top of it.
                 openSaveModal();
             });
         }
@@ -951,8 +1338,10 @@ const UI = (() => {
         if (dom.buildGrid) {
             dom.buildGrid.innerHTML = "";
             BUILDS.forEach(b => {
-                const card = document.createElement("div");
+                const card = document.createElement("button");
+                card.type = "button";
                 card.className = "build-card";
+                card.setAttribute("aria-pressed", "false");
                 card.innerHTML = `
                     <img src="${b.avatar}" class="build-avatar" alt="${b.name}">
                     <div class="build-name">${b.name}</div>
@@ -985,6 +1374,11 @@ const UI = (() => {
     }
 
     function handleVnNext() {
+        if (finishVnLine) {
+            finishVnLine();
+            return;
+        }
+
         vnStep++;
         if (vnStep < VN_STORY.length) {
             showVnDialogue();
@@ -997,6 +1391,7 @@ const UI = (() => {
     }
 
     function showVnDialogue() {
+        if (finishVnLine) finishVnLine();
         const line = VN_STORY[vnStep];
         dom.vnSpeaker.textContent = line.speaker;
 
@@ -1005,36 +1400,69 @@ const UI = (() => {
         let i = 0;
         const text = line.text;
 
-        dom.vnNextBtn.disabled = true;
+        dom.vnNextBtn.disabled = false;
+        dom.vnNextBtn.innerHTML = 'Reveal line <i class="fa-solid fa-forward"></i>';
+
+        const finishLine = () => {
+            if (!finishVnLine) return;
+            clearInterval(typeInterval);
+            dom.vnText.textContent = text;
+            finishVnLine = null;
+            dom.vnNextBtn.innerHTML = 'Continue <i class="fa-solid fa-caret-right"></i>';
+        };
+        finishVnLine = finishLine;
 
         const typeInterval = setInterval(() => {
             if (i < text.length) {
                 dom.vnText.textContent += text.charAt(i);
                 i++;
             } else {
-                clearInterval(typeInterval);
-                dom.vnNextBtn.disabled = false;
+                finishLine();
             }
         }, 20);
     }
 
+    // Skip down to selectBuild to override it:
     function selectBuild(b, cardElement) {
         selectedBuild = b;
-        document.querySelectorAll(".build-card").forEach(c => c.classList.remove("selected"));
+        document.querySelectorAll(".build-card").forEach(c => {
+            c.classList.remove("selected");
+            c.setAttribute("aria-pressed", "false");
+        });
         cardElement.classList.add("selected");
+        cardElement.setAttribute("aria-pressed", "true");
         dom.btnStartAdventure.disabled = false;
+
+        // Show the description
+        const descBox = document.getElementById("build-description");
+        if (descBox) {
+            descBox.innerHTML = b.description;
+            descBox.style.display = "block";
+        }
     }
 
     function showSlashAnimation() {
         // Create the VFX dynamically over the enemy panel
+        const container = document.createElement("div");
+        container.className = "vfx-container";
         const slash = document.createElement("div");
-        slash.className = "slash-vfx active";
-        document.body.appendChild(slash);
+        slash.className = "vfx-slash";
+        container.appendChild(slash);
+        dom.enemyPanel.appendChild(container);
 
         // Clean up
-        setTimeout(() => {
-            slash.remove();
-        }, 450);
+        setTimeout(() => container.remove(), 400);
+    }
+
+    function showManaBoltAnimation() {
+        const container = document.createElement("div");
+        container.className = "vfx-container";
+        const bolt = document.createElement("div");
+        bolt.className = "vfx-mana-bolt";
+        container.appendChild(bolt);
+        dom.enemyPanel.appendChild(container);
+
+        setTimeout(() => container.remove(), 600);
     }
 
     // ---- Public API ----
@@ -1064,7 +1492,10 @@ const UI = (() => {
         updateInventoryModal,
         openSaveModal,
         updateSaveModal,
-        showSlashAnimation
+        resetNarrative,
+        showSlashAnimation,
+        showManaBoltAnimation,
+        updateHotbar
     };
 })();
 

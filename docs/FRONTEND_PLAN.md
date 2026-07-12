@@ -1,241 +1,183 @@
 # Frontend Plan
 
 Status: active area plan
-Last updated: 2026-07-11
+Last updated: 2026-07-12
 
 ## Outcome
 
-Preserve the current visual identity and useful interaction concepts, but replace the mutable, timer-driven browser game engine with a typed client that renders authoritative snapshots and events from a deterministic game service.
+Finish a polished, intuitive, full-featured frontend prototype in semantic HTML, modular vanilla JavaScript, and project-owned CSS before beginning FastAPI/RAG implementation.
 
-Target stack: React, TypeScript, and Vite. Migration is incremental: first capture and stabilize the intended vertical slice, then port one screen/feature boundary at a time while reusing suitable CSS and assets.
+The frontend should be excellent enough to serve as the permanent visual client and simple enough for the project owner to understand, extend, and debug without learning a framework first.
 
-## Current baseline
+The canonical visual language is [The Shimmering Wastes Design System](DESIGN_SYSTEM.md).
 
-The current static frontend is visually promising and includes:
+## Frontend principles
 
-- Main menu, audio, visual-novel intro, and five character builds.
-- Desktop HUD, time themes, particles, transitions, and narrative chat.
-- Last Bastion, merchant, healer, and Ash Plains scripted flow.
-- Stats, inventory, quick-use items, equipment ideas, and save-slot UI.
-- Choice buttons plus optional free text.
+1. Keep HTML, CSS, and JavaScript visible and understandable.
+2. Use npm for testing/tooling or focused libraries, not as an excuse to introduce framework complexity.
+3. Keep one local rules path until FastAPI becomes authoritative.
+4. Separate data, local game state, and UI behavior instead of adding more global cross-calls.
+5. Render player/model text safely.
+6. Every visible control must work, explain why it is unavailable, or be removed.
+7. Desktop polish cannot come at the cost of mobile, keyboard, reduced-motion, or readable prose.
+8. Add features only when they improve the prepare -> explore -> fight -> return loop.
 
-It has no API calls. `frontend/js/data.js`, `game.js`, and `ui.js` own all state, rules, narrative, DOM mutation, and local saves.
+## Current strengths to preserve
 
-## Release-blocking findings
+- Strong post-magical-apocalypse subject and pixel-art menu background.
+- Main menu -> visual-novel intro -> character creation onboarding.
+- Five build concepts with useful visual portraits.
+- Narrative log plus explicit choices and optional free text.
+- HUD resources, time cycle, particles, region transitions, inventory, save slots, and combat feedback concepts.
+- Last Bastion, merchant, healer, and Ash Plains as a useful playable slice.
 
-The current uncommitted feature batch must not be treated as complete until these are resolved:
+## Problems to remove
 
-- Scripted numeric combat and a new dynamic ability engine run side by side.
-- Ability buttons are unstyled and inert because the UI checks `window.GameEngine` while the engine is a top-level lexical binding.
-- The new VFX code creates class names that have no matching CSS.
-- Main-menu Load Game opens a Bootstrap modal behind the menu's higher z-index layer.
-- The UI displays "Auto-saved" without writing a save.
-- `getDerivedStats()` mutates and permanently inflates max HP/MP.
-- Moving equipment can reroll an affix and create value from nothing.
-- Dynamic combat reads `xpReward`/`coinsReward`, while data defines `expReward`/`coinReward`.
-- Return/flee/explore narration can disagree with the stored region.
-- Purchases and healing can drive currency below zero.
-- Rust Beetle combat reuses Ash Hound-specific scripted narrative.
-- Player/model text flows through `innerHTML`, creating a DOM injection boundary.
-- Player name/build avatar are not reflected consistently in the HUD or save-slot/load presentation.
-- A 375px viewport leaves only about 55px for the main game because the sidebar remains fixed at 320px.
-- Build, inventory, equipment, and quick-use cards are mouse-only clickable `div`s.
-- Save files have no schema version/migration and do not restore a coherent combat/narrative phase.
-- Map, settings, party, Crystal Forest, Colossus, and much declared content are placeholders or unreachable.
+- Generic neon-card visual language, excessive glow, inconsistent radii, and scattered one-off styles.
+- Desktop-only fixed sidebar and unusable 375px layout.
+- Competing scripted and dynamic combat systems.
+- Inert/unstyled ability hotbar and mismatched VFX class names.
+- False autosave feedback and broken main-menu load layering.
+- Derived-stat reads that mutate/inflate HP and MP.
+- Equipment transfers that can reroll affixes.
+- Reward field mismatches and missing loot in the dynamic path.
+- Travel/region state that can contradict narration.
+- Purchases/healing that can create negative currency.
+- Player/model input rendered through unsafe HTML.
+- Mouse-only build, inventory, equipment, and quick-use controls.
+- Player name/build not reflected consistently.
+- Save state without schema normalization or coherent combat restoration.
+- Placeholder Party/Map/Settings controls presented like finished features.
+- Runtime DiceBear avatars and multiple CDN dependencies without clear ownership.
 
-The current strengths are worth preserving; these failures are reasons to establish state and contract boundaries before adding more features.
+## Target vanilla structure
 
-## Target client responsibilities
-
-The frontend owns:
-
-- Screen and panel state.
-- Input drafts and local preferences.
-- Pending, retry, conflict, reconnect, and fallback presentation.
-- Animation and reduced-motion behavior.
-- Rendering of player-visible snapshots, events, narrative blocks, action options, and approved assets.
-
-The frontend does not own:
-
-- Damage, loot, prices, legal actions, travel, time, quests, progression, or authoritative saves.
-- Parsing narrative strings to infer mechanics.
-- Trusting model HTML, URLs, asset paths, or action IDs.
-
-## Target structure
+The current files may be split gradually after behavior is stable:
 
 ```text
 frontend/
-  src/
-    app/
-      routes/
-      providers/
-    api/
-      client/
-      contracts/
-    features/
-      onboarding/
-      game-shell/
-      narrative/
-      actions/
-      combat/
-      inventory/
-      character/
-      saves/
-      settings/
-    components/
-    styles/
-      tokens.css
-      global.css
-    assets/
-    mocks/
-      game-service.ts
-      fixtures/
-    test/
+  index.html
+  css/
+    design-system.css
+    style.css              # legacy styles reduced over time
+  js/
+    data.js                # temporary catalogs and authored scenes
+    game.js                # temporary local deterministic engine
+    ui.js                  # rendering and interaction behavior
+    preferences.js         # later: user settings
+    storage.js             # later: versioned local saves
+    app.js                 # later: boot and coordination
+  img/
+  audio/
 ```
 
-Use an explicit UI/game phase value such as:
+Do not split files merely to appear architectural. Extract a module when it has a clear responsibility, public API, and testable behavior.
 
-```text
-menu | intro | creating | exploring | resolving | combat_player |
-combat_enemy | defeated | dead | disconnected
-```
+## F0 - Correctness and trust
 
-Timers animate a known phase; they do not secretly determine state transitions.
+Goal: make the current loop truthful and coherent before visual expansion.
 
-## Crosswalk to the project roadmap
+- [x] Choose the dynamic ability resolver as the single combat path and remove scripted numeric combat updates.
+- [x] Fix ability invocation, cooldowns, guard, flee, victory rewards, loot, and enemy-specific narration.
+- [x] Make derived stats pure and equipment transfers identity-preserving.
+- [x] Validate affordability, inventory, travel, and region transitions.
+- [x] Implement real debounced autosave and a usable load/continue path.
+- [x] Normalize old local saves with a schema version.
+- [x] Sanitize authored narrative HTML and render player/model text safely.
+- [x] Reflect player name, build, and portrait consistently.
+- [ ] Replace duplicate exploratory scripts with meaningful assertions.
 
-- Project Phase 1 delivers Frontend F0-F1.
-- Frontend F2 can proceed against mock contracts during Project Phases 2-3.
-- Project Phases 4-6 build content, retrieval, and AI behind that contract.
-- Project Phase 7 delivers Frontend F3-F4 and the end-to-end slice.
-- Frontend F5 belongs to Project Phase 8 campaign expansion.
+Exit gate: Last Bastion -> merchant/healer -> Ash Plains -> victory/flee/death -> save/reload has no state/narrative contradiction.
 
-## F0 - Preserve and stabilize the prototype
+## F1 - Bastion Field Rig redesign
 
-Goal: establish a truthful reference before migration.
+Goal: replace the generic AI-generated appearance with the canonical design language.
 
-- [ ] Decide one combat behavior and remove/disable the competing path.
-- [ ] Fix ability invocation/styles, VFX class mismatch, load layering, and false autosave feedback.
-- [ ] Make derived calculations pure and repair reward/equipment/economy/travel invariants.
-- [ ] Sanitize player/narrative rendering.
-- [ ] Reflect player identity and build consistently.
-- [ ] Add a version to any retained local save format.
-- [ ] Replace the duplicate smoke scripts with assertions for the intended vertical slice.
-- [ ] Capture desktop and mobile reference screenshots.
-- [ ] Document which unfinished features are deliberately deferred.
-- [ ] Preserve the inherited uncommitted batch on a dedicated branch, patch, or clearly labelled WIP commit before migration; do not discard it with checkout/reset/clean.
+- [x] Add centralized tokens and component primitives in `design-system.css`.
+- [x] Redesign the main menu around an asymmetrical expedition-record composition.
+- [x] Rebuild the sidebar as a coherent field rig rather than stacked cards.
+- [x] Rework narrative messages into an expedition log with speaker sigils.
+- [x] Rework choices and combat abilities into command strips/action deck.
+- [x] Restyle stats, inventory, save, map, and settings through one modal/sheet pattern.
+- [ ] Remove obsolete selectors, undefined tokens, inconsistent utilities, and decorative effects that do not communicate state.
+- [x] Replace runtime-generated NPC avatars with project-owned sigils/assets.
 
-Exit gate: Last Bastion -> Ash Hound -> victory or death -> save/reload works without narrative/state disagreement, and automated smoke checks fail on regressions.
+Exit gate: all core screens look like one authored product and use the documented tokens/component patterns.
 
-## F1 - Establish React, TypeScript, and Vite
+## F2 - Responsive and accessible shell
 
-Goal: introduce the long-term shell without a blind big-bang rewrite.
+Goal: make the game comfortable on desktop, tablet, mobile, keyboard, and touch.
 
-- [ ] Add the Vite/React/TypeScript toolchain and canonical scripts.
-- [ ] Preserve the current static implementation on a temporary reference route or tagged commit.
-- [ ] Port design tokens, fonts/assets, and global layout intentionally; remove duplicate/obsolete CSS.
-- [ ] Port main menu, intro, and character creation first.
-- [ ] Implement a contract-compatible mock `GameService`.
-- [ ] Port the HUD/narrative/action shell from fixtures.
-- [ ] Add error boundaries and loading/conflict/fallback states.
+- [ ] Desktop two-column layout with readable narrative measure.
+- [ ] Tablet field-rig drawer and compact status strip.
+- [ ] Mobile stacked log with sticky action area and full-height sheets.
+- [x] Semantic buttons for builds, items, equipment, quick use, and choices.
+- [x] Labels, visible focus, live regions, and progress semantics.
+- [ ] Keyboard and touch alternatives for every hover tooltip.
+- [ ] Minimum touch target and contrast checks.
+- [ ] No horizontal clipping at 375px, 768px, 1280px, and 1600px.
 
-Exit gate: the same onboarding and first exploration screen render through typed components and fixtures, with no game-rule mutation in components.
+Exit gate: onboarding, exploration, combat, inventory, and save/load work at the four target widths and with keyboard-only navigation.
 
-## F2 - Contract-driven gameplay UI
+## F3 - QOL and complete frontend features
 
-Goal: render the deterministic game model cleanly.
+Goal: remove friction without overwhelming the player.
 
-- [ ] Generate or define types for `GameSnapshot`, `ActionOption`, `TurnEvent`, `NarrativeBlock`, and `TurnResult`.
-- [ ] Implement action submission with request IDs and expected state versions.
-- [ ] Render explicit choices, disabled reasons, free-text clarification, and retries.
-- [ ] Render structured combat events through one action bar.
-- [ ] Port stats, inventory, equipment, quick use, and character identity.
-- [ ] Map speaker/entity/asset IDs through an approved local manifest.
-- [ ] Keep mock fixtures equivalent to backend contracts.
+- [x] Settings: music, text size, typewriter speed/skip, reduced motion, and preference persistence.
+- [x] Map: discovered regions, recommended level, current location, and locked-state explanation.
+- [x] Save management: autosave, manual slots, timestamps, player/build identity, delete confirmation, and corrupt-save recovery.
+- [ ] Narrative controls: skip typing, scroll-to-latest, and clear distinction between flavor and numeric outcomes.
+- [ ] Action help: visible shortcuts, disabled reasons, costs/cooldowns, and input examples only when needed.
+- [ ] Inventory: equipment comparison, consumable use confirmation where destructive, and clear empty states.
+- [x] Combat: turn state, target status, cooldown visibility, damage feedback, guard/flee clarity, and reduced-motion variants.
+- [ ] Connection/AI placeholders: honest offline/local-prototype states rather than fake backend feedback.
 
-Exit gate: all stateful screens can run against both fixtures and the same typed service interface used by the backend client.
+Exit gate: every visible navigation control has finished behavior and the main loop can be played without developer knowledge.
 
-## F3 - Responsive and accessible shell
+## F4 - Polish and verification
 
-Goal: make the game usable beyond a desktop screenshot.
+Goal: reach the frontend freeze before backend learning begins.
 
-- [ ] Desktop: retain the two-column HUD and narrative composition.
-- [ ] Tablet: collapsible HUD drawer plus compact status strip.
-- [ ] Mobile: stacked layout, sticky action composer, and bottom navigation for character/inventory/map/settings.
-- [ ] Use semantic buttons for every interactive card.
-- [ ] Add labels, focus management, visible focus, live regions, and progressbar semantics.
-- [ ] Provide keyboard and touch alternatives to hover tooltips.
-- [ ] Add reduced-motion mode, typewriter skip/speed, and persistent audio/text preferences.
-- [ ] Correct contrast and minimum target sizes.
-- [ ] Test at representative desktop, tablet, and mobile viewports.
+- [ ] Browser tests for new game, each build, merchant, healer, combat, death, save/load, settings, and mobile drawer.
+- [ ] Accessibility scan and keyboard walkthrough.
+- [ ] Visual snapshots at desktop/tablet/mobile.
+- [ ] Asset size and runtime dependency review.
+- [ ] Remove dead mock scenarios, duplicate CSS, console noise, broken placeholders, and unused assets.
+- [ ] Playtest for pacing, choice clarity, narrative readability, and accidental information overload.
+- [ ] Record remaining backend-dependent behavior explicitly.
 
-Exit gate: onboarding, one full turn, combat, inventory, and save/reload pass keyboard and mobile browser checks with no horizontal clipping.
+Exit gate: frontend critical tests pass, manual checks are recorded, no visible control is knowingly fake, and the UI is frozen for the first FastAPI integration.
 
-## F4 - Backend integration
+Validation note, 2026-07-12:
 
-Goal: replace mock authority with the real turn API.
+- The live 1280x720 pass reached menu, intro, character creation, the running HUD/log/action shell, and Stats.
+- The menu title overlap is browser-verified as repaired. Compact laptop-height sidebar and bounded-modal fixes were implemented from measured overflow evidence but still require a second rendered pass.
+- A Brave `file://` review confirmed zero-setup loading and exposed a second legacy transform on the subtitle; the transform and remaining reward/notification glow were removed in the design-system override.
+- The local preview became unavailable before inventory, map, settings, save, merchant, combat, responsive breakpoints, keyboard, and touch could be completed. None of those boxes are accepted on the strength of static inspection alone.
 
-- [ ] Create/load a game and persist the guest ownership token safely.
-- [ ] Submit idempotent turns and handle `409` state conflicts.
-- [ ] Rehydrate from an authoritative snapshot after reload/reconnect.
-- [ ] Show request/narration progress and recover by idempotent retry; if a connection drops after mechanics commit, render the durable fallback/result returned for that turn rather than resubmitting mechanics.
-- [ ] Support deterministic fallback narrative and provider-disabled mode.
-- [ ] Add a developer-only turn trace for events and retrieved source IDs.
-- [ ] Add end-to-end contract fixtures to CI.
+## Backend handoff after frontend freeze
 
-Exit gate: a browser completes the portfolio vertical slice against a restarted backend and survives duplicate requests, reconnect, and model failure.
+The vanilla client will later consume a small game-service boundary:
 
-## F5 - Player-facing feature expansion
+- `createGame()`
+- `getGame()`
+- `submitTurn()`
+- `listTurns()`
+- `save/continue` through the backend
 
-After the end-to-end slice is stable, prioritize:
+Until then, `game.js` implements the same concepts locally for learning and playtesting. When FastAPI arrives, rules move behind the API without requiring a visual rewrite.
 
-1. Quest journal and codex/discoveries.
-2. Map and discovered locations.
-3. Complete settings and accessibility preferences.
-4. Narrative history/search and source-safe recap.
-5. Equipment comparison, sorting, and filtering.
-6. Relationship/reputation display when backed by mechanics.
-7. Crystal Forest content and its distinct gameplay mechanic.
-8. Colossus encounter and ending flow.
+## Testing direction
 
-Do not build party/companion UI, multiplayer, procedural world maps, or advanced agent dashboards until their backend mechanics exist.
+npm may be introduced for:
 
-## Testing strategy
+- A small unit runner for pure JavaScript mechanics/storage helpers.
+- Browser automation for complete flows.
+- Accessibility checks.
+- Formatting/linting only when it produces actionable feedback.
 
-### Unit/component
+Tests must make assertions and manage their own server lifecycle. The current duplicate Puppeteer scripts are not a test suite.
 
-- Rendering for every game phase and event type.
-- Action availability and disabled reasons.
-- Safe text/Markdown rendering.
-- Asset-ID fallback.
-- Responsive navigation and preference reducers.
+## Completion rule
 
-### Contract
-
-- Frontend types/fixtures match generated OpenAPI schemas.
-- Unknown event types fail visibly in development and degrade safely in production.
-- Old snapshots invoke a defined migration/error path.
-
-### Browser
-
-- New game and every build.
-- Merchant affordability and inventory update.
-- Combat victory, flee, and death.
-- Save/reload and reconnect.
-- Free-text success, clarification, rejection, and provider fallback.
-- Desktop/tablet/mobile layouts.
-- Keyboard-only navigation and accessibility scan.
-- Visual regression for core screens.
-
-## Asset and performance plan
-
-- Replace runtime DiceBear requests with approved local assets or an intentional cached asset service.
-- Bundle dependencies instead of relying on runtime CDNs.
-- Convert portraits/backgrounds to suitable modern formats and dimensions.
-- Compress or stream the approximately 11 MB background music asset appropriately.
-- Pause decorative animation when hidden and honor reduced motion.
-- Establish initial budgets for bundle size, first render, turn UI response, and animation frame stability.
-
-## Frontend completion rule
-
-A visual feature is not complete when its markup exists. It is complete when it is reachable, keyboard/touch usable, driven by authoritative state or contract fixtures, covered by a meaningful check, and reflected in `PROJECT_STATUS.md`.
+A frontend feature is complete only when it is reachable, visually consistent, keyboard/touch usable, truthful about state, covered by a meaningful check, and reflected in `PROJECT_STATUS.md`.

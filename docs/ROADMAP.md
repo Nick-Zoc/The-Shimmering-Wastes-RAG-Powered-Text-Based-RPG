@@ -1,6 +1,6 @@
 # Project Roadmap
 
-Last updated: 2026-07-11
+Last updated: 2026-07-12
 
 This is the canonical phase checklist. Detailed implementation belongs in the linked area plans. A phase is complete only when its exit gate is demonstrated and `PROJECT_STATUS.md` records the validation.
 
@@ -19,7 +19,7 @@ Goal: recover the real project state and replace stale planning with maintained 
 - [x] Verify the accidental tracked `.env` contains no credential or secret requiring history remediation.
 - [ ] Remove the accidental `.env` from the Git index and add `.env.example` only when real variables exist.
 - [ ] Preserve the unfinished frontend batch on a dedicated branch, patch, or clearly labelled WIP commit.
-- [x] Choose the migration direction: repair only the reference vertical slice and its blockers, then migrate incrementally.
+- [x] Supersede the React migration with a vanilla HTML/CSS/JS frontend and learning-first backend scope in ADR 0003.
 
 Exit gate: current truth, target boundaries, immediate risks, and next phase are explicit. New documentation appears in Git status.
 
@@ -30,19 +30,27 @@ Notes:
 
 ## Phase 1 - Frontend baseline and typed foundation
 
-Goal: preserve the art direction while establishing a testable long-term client.
+Goal: finish a distinctive, correct, responsive, and testable vanilla frontend before backend work.
 
 See [Frontend Plan](FRONTEND_PLAN.md), F0-F1.
 
 - [ ] Resolve or remove the dual-combat, ability, VFX, load, autosave, derived-stat, affix, reward, travel, economy, and injection regressions.
 - [ ] Replace duplicate exploratory browser scripts with assertions.
 - [ ] Capture reference flows and responsive screenshots.
-- [ ] Establish React, TypeScript, and Vite incrementally.
-- [ ] Port onboarding and the game shell behind a typed mock service.
+- [ ] Implement the Bastion Field Rig design system across all core components.
+- [ ] Refactor the existing HTML/CSS/vanilla JS only where responsibilities become clearer and testable.
+- [ ] Complete settings, map, save management, responsive layouts, accessibility, and player-identity polish.
 - [ ] Add canonical lint, type-check, unit, and browser commands.
 - [ ] Run the frontend checks in CI.
 
-Exit gate: onboarding and initial Bastion exploration run through typed fixtures with meaningful automated checks and no rules hidden in UI components; the preserved legacy Ash Hound slice remains a tested behavior reference for Phase 2/F2.
+Exit gate: the complete local prototype loop is visually coherent, responsive, accessible, mechanically truthful, and covered by meaningful automated/manual checks. The frontend is frozen before Phase 2 begins.
+
+Notes:
+
+- The first correctness/design/QOL implementation is present in the working tree and the deterministic engine assertions pass.
+- A 1280x720 live-browser pass reached onboarding, character creation, the main game shell, and Stats; it found title, sidebar-height, and modal-height defects that were repaired in the working tree.
+- Static frontend contract assertions now complement the engine test, but they are not accepted as browser or accessibility evidence.
+- Phase 1 remains open until responsive visual checks, keyboard/touch playtesting, legacy CSS cleanup, and canonical browser assertions provide the acceptance evidence.
 
 ## Phase 2 - Deterministic game engine
 

@@ -13,7 +13,7 @@ Before editing, read:
 
 Also read the document for the area being changed:
 
-- Frontend: `docs/FRONTEND_PLAN.md`
+- Frontend: `docs/FRONTEND_PLAN.md` and `docs/DESIGN_SYSTEM.md`
 - Mechanics: `docs/GAME_DESIGN.md`
 - Lore, assets, ingestion, retrieval, or AI: `docs/CONTENT_AND_RAG.md`
 - Major architectural change: the relevant file under `docs/decisions/`
@@ -90,6 +90,9 @@ Until the new toolchain lands, the minimum code checks are:
 node --check frontend/js/data.js
 node --check frontend/js/game.js
 node --check frontend/js/ui.js
+node tests/game-engine.test.mjs
+node tests/frontend-contract.test.mjs
+tidy -errors -quiet frontend/index.html
 ```
 
-The current Puppeteer files are exploratory and do not constitute a passing test suite. Replace this section with the canonical install, lint, type-check, unit, integration, and browser commands when Phase 1 establishes them.
+The current Puppeteer files are exploratory and do not constitute a passing test suite. Tidy warnings about intentionally empty Font Awesome `<i>` elements are expected; structural HTML errors are not. Replace this section with the canonical install, lint, unit, accessibility, and browser commands when Phase 1 establishes them.

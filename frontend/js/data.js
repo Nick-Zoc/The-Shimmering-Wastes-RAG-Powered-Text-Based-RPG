@@ -15,6 +15,7 @@ const ENEMIES = {
         expReward: 25,
         coinReward: { min: 3, max: 8 },
         loot: "Scrap Metal",
+        lootItemId: "scrap_metal",
         description: "A thin, six-legged beast with glowing red eyes and smoking fur. It hunts in packs across the ash dunes."
     },
     rust_beetle: {
@@ -27,6 +28,7 @@ const ENEMIES = {
         expReward: 30,
         coinReward: { min: 5, max: 12 },
         loot: "Scrap Metal",
+        lootItemId: "scrap_metal",
         description: "A giant beetle covered in rusted metal. Slow but very tough to break through."
     },
     crystal_golem: {
@@ -39,6 +41,7 @@ const ENEMIES = {
         expReward: 60,
         coinReward: { min: 15, max: 25 },
         loot: "Shimmering Shard",
+        lootItemId: "shimmering_shard",
         description: "A huge figure made of sharp blue crystals. The ground shakes with every step it takes."
     },
     mana_phantom: {
@@ -50,7 +53,8 @@ const ENEMIES = {
         region: "Crystal Forest",
         expReward: 55,
         coinReward: { min: 10, max: 20 },
-        loot: "Shimmering Shard",
+        loot: "Mana Vial",
+        lootItemId: "mana_vial",
         description: "A ghost-like creature made of pure magic energy. Physical attacks go right through it."
     },
     wastes_colossus: {
@@ -63,6 +67,7 @@ const ENEMIES = {
         expReward: 500,
         coinReward: { min: 100, max: 200 },
         loot: "The Colossus Core",
+        lootItemId: "colossus_core",
         isBoss: true,
         description: "A massive monster of fused metal and magic, towering over the crater. A blinding energy core glows in its chest."
     }
@@ -76,6 +81,7 @@ const ITEMS = {
         iconColor: "#ff0054",
         effect: { hp: 20 },
         cost: 10,
+        rarity: "common",
         description: "A glowing red potion. Heals 20 HP."
     },
     mana_vial: {
@@ -85,6 +91,7 @@ const ITEMS = {
         iconColor: "#00b4d8",
         effect: { mp: 20 },
         cost: 15,
+        rarity: "common",
         description: "A shimmering blue liquid. Restores 20 MP."
     },
     scrap_metal: {
@@ -93,6 +100,7 @@ const ITEMS = {
         icon: "fa-gear",
         iconColor: "#adb5bd",
         sellPrice: { min: 2, max: 5 },
+        rarity: "common",
         description: "Broken pieces of old machines. Can be sold for a few coins."
     },
     shimmering_shard: {
@@ -101,29 +109,55 @@ const ITEMS = {
         icon: "fa-gem",
         iconColor: "#00f5d4",
         sellPrice: { min: 15, max: 20 },
+        rarity: "uncommon",
         description: "A glowing crystal piece filled with magic energy. Worth good coins."
     },
     rusted_pipe: {
         name: "Rusted Pipe",
-        type: "weapon",
+        type: "equipment",
+        equipSlot: "main_hand",
         icon: "fa-hammer",
         iconColor: "#ff6b35",
-        bonusStat: { str: 2 },
+        bonusStat: { str: 2, agi: 1 },
+        rarity: "common",
         description: "A heavy iron pipe. Your first weapon. Better than bare fists."
     },
     padded_clothing: {
         name: "Padded Clothing",
-        type: "armor",
+        type: "equipment",
+        equipSlot: "chest",
         icon: "fa-shirt",
         iconColor: "#6c757d",
-        bonusStat: { def: 1 },
+        bonusStat: { def: 2, hp: 10 },
+        rarity: "common",
         description: "Layers of cloth and leather. Basic protection."
+    },
+    iron_circlet: {
+        name: "Iron Circlet",
+        type: "equipment",
+        equipSlot: "head",
+        icon: "fa-crown",
+        iconColor: "#adb5bd",
+        bonusStat: { def: 1, int: 2 },
+        rarity: "uncommon",
+        description: "A rusted iron band worn on the head. Helps focus the mind."
+    },
+    lucky_coin: {
+        name: "Lucky Coin",
+        type: "equipment",
+        equipSlot: "accessory",
+        icon: "fa-coins",
+        iconColor: "#ffd700",
+        bonusStat: { agi: 2, int: 1 },
+        rarity: "rare",
+        description: "A coin from the Old World. It always lands heads up."
     },
     colossus_core: {
         name: "The Colossus Core",
         type: "quest",
         icon: "fa-sun",
         iconColor: "#ffd700",
+        rarity: "legendary",
         description: "The beating heart of the Wastes Colossus. Getting this means you won the game."
     }
 };
@@ -150,7 +184,7 @@ const REGIONS = {
         name: "The Last Bastion",
         levelRange: "Safe Zone",
         icon: "fa-shield-halved",
-        color: "#ffd700",
+        color: "#b99a52",
         description: "A walled settlement inside a narrow canyon. The last safe place for humans. Smells of cooking meat and machine oil.",
         isSafe: true
     },
@@ -158,7 +192,7 @@ const REGIONS = {
         name: "The Ash Plains",
         levelRange: "Lv. 1–3",
         icon: "fa-wind",
-        color: "#ff6b35",
+        color: "#d56a3a",
         description: "A wide, flat wasteland covered in grey ash. The wind howls through dead trees. Dangerous creatures roam here.",
         enemies: ["ash_hound", "rust_beetle"]
     },
@@ -166,7 +200,7 @@ const REGIONS = {
         name: "The Crystal Forest",
         levelRange: "Lv. 4–7",
         icon: "fa-gem",
-        color: "#00f5d4",
+        color: "#72e3cc",
         description: "Sharp blue-green crystals grow from the ground like frozen lightning. The air buzzes with magic. Only the strong survive.",
         enemies: ["crystal_golem", "mana_phantom"]
     },
@@ -174,10 +208,62 @@ const REGIONS = {
         name: "The Colossus Crater",
         levelRange: "Lv. 8+",
         icon: "fa-skull",
-        color: "#ff0054",
+        color: "#c84b5a",
         description: "A massive hole in the ground that gives off intense heat and blinding light. The final boss waits at its center.",
         enemies: ["wastes_colossus"],
         isBossZone: true
+    }
+};
+
+const ABILITIES = {
+    "strike": {
+        id: "strike",
+        name: "Strike",
+        icon: "fa-gavel",
+        type: "physical",
+        multiplier: 1.0,
+        mpCost: 0,
+        cooldown: 0,
+        description: "A fast, basic attack. 100% Physical Damage."
+    },
+    "heavy_blow": {
+        id: "heavy_blow",
+        name: "Heavy Blow",
+        icon: "fa-hammer",
+        type: "physical",
+        multiplier: 1.5,
+        mpCost: 5,
+        cooldown: 2,
+        description: "A powerful, tiring strike. 150% Physical Damage."
+    },
+    "mana_bolt": {
+        id: "mana_bolt",
+        name: "Mana Bolt",
+        icon: "fa-wand-sparkles",
+        type: "magical",
+        multiplier: 1.2,
+        mpCost: 8,
+        cooldown: 0,
+        description: "A quick burst of arcane energy. 120% Magical Damage."
+    },
+    "first_aid": {
+        id: "first_aid",
+        name: "First Aid",
+        icon: "fa-bandage",
+        type: "heal",
+        healAmount: 20,
+        mpCost: 10,
+        cooldown: 3,
+        description: "Quickly patch yourself up for 20 HP."
+    },
+    "guard": {
+        id: "guard",
+        name: "Brace",
+        icon: "fa-shield-halved",
+        type: "defend",
+        mpCost: 0,
+        cooldown: 0,
+        description: "Brace for the next strike, reducing incoming damage this round."
     }
 };
 
@@ -278,148 +364,12 @@ Something moves in the ash ahead — something low, fast, and hungry. Red eyes f
 
 <em>An <strong>Ash Hound</strong> has spotted you!</em>`,
         choices: [
-            { id: "combat_attack", text: "Attack with your Rusted Pipe!", icon: "fa-hammer" },
-            { id: "combat_magic", text: "Cast a Mana Bolt", icon: "fa-wand-sparkles" },
-            { id: "combat_defend", text: "Raise your guard", icon: "fa-shield" },
-            { id: "combat_flee", text: "Try to run away!", icon: "fa-person-running" }
+            { id: "combat_flee", text: "Attempt to flee", icon: "fa-person-running" }
         ],
         stateUpdates: {
             time_advanced: true,
             combat_active: true,
             current_enemy: "ash_hound"
-        }
-    },
-    combat_attack: {
-        narrative: `You grab your <strong>Rusted Pipe</strong> and swing hard at the Ash Hound! The hit connects with a loud crunch — <strong class="text-success">12 damage</strong>!
-
-The beast growls and bites your arm — <strong class="text-danger">4 damage</strong> to you!
-
-<span class="enemy-status">Ash Hound HP: 18/30</span>`,
-        choices: [
-            { id: "combat_attack_2", text: "Strike again!", icon: "fa-hammer" },
-            { id: "combat_magic", text: "Switch to Mana Bolt", icon: "fa-wand-sparkles" },
-            { id: "combat_defend", text: "Defend this round", icon: "fa-shield" },
-            { id: "combat_flee", text: "Try to run!", icon: "fa-person-running" }
-        ],
-        stateUpdates: {
-            hp_change: -4,
-            combat_active: true,
-            time_advanced: false
-        }
-    },
-    combat_attack_2: {
-        narrative: `You lift the pipe over your head and smash it down! <strong class="text-success">14 damage!</strong> The Ash Hound cries out and stumbles.
-
-It fights back with a desperate lunge — its claws scratch your side for <strong class="text-danger">3 damage</strong>.
-
-<span class="enemy-status">Ash Hound HP: 4/30</span>
-
-<em>The creature is getting weak. One more good hit should finish it off.</em>`,
-        choices: [
-            { id: "combat_finish", text: "Finish it off!", icon: "fa-skull-crossbones" },
-            { id: "combat_defend", text: "Play it safe, defend", icon: "fa-shield" }
-        ],
-        stateUpdates: {
-            hp_change: -3,
-            combat_active: true,
-            time_advanced: false
-        }
-    },
-    combat_finish: {
-        narrative: `With one final powerful swing, you bring the Rusted Pipe down on the Ash Hound. The creature falls into the ash, its red eyes flickering out.
-
-<strong class="text-success">⚔️ VICTORY!</strong>
-
-You earn <strong>25 EXP</strong> and find <strong>5 coins</strong> and some <strong>Scrap Metal</strong> in the remains.
-
-The ash settles around you. The purple sky swirls above. The Wastes go on forever.
-
-<em>The afternoon sun beats down. Time moves forward.</em>`,
-        choices: [
-            { id: "explore_ash", text: "Keep exploring the Ash Plains", icon: "fa-compass" },
-            { id: "return_bastion", text: "Go back to the Bastion to rest", icon: "fa-house" },
-            { id: "check_stats", text: "Check your stats", icon: "fa-clipboard-list" }
-        ],
-        stateUpdates: {
-            combat_active: false,
-            current_enemy: null,
-            exp_change: 25,
-            coins_change: 5,
-            time_advanced: true,
-            addItem: "scrap_metal"
-        }
-    },
-    combat_magic: {
-        narrative: `You stretch out your hand and focus your mana. A crackling bolt of blue-green energy shoots through the air and hits the Ash Hound right in the chest — <strong class="text-success">18 magic damage</strong>! The creature howls in pain.
-
-It stumbles but still snaps at your leg — <strong class="text-danger">5 damage</strong>!
-
-Your mana drops. <strong>-8 MP</strong>
-
-<span class="enemy-status">Ash Hound HP: 12/30</span>`,
-        choices: [
-            { id: "combat_attack", text: "Follow up with a melee hit!", icon: "fa-hammer" },
-            { id: "combat_magic_2", text: "Cast another Mana Bolt", icon: "fa-wand-sparkles" },
-            { id: "combat_defend", text: "Defend", icon: "fa-shield" }
-        ],
-        stateUpdates: {
-            hp_change: -5,
-            mana_change: -8,
-            combat_active: true,
-            time_advanced: false
-        }
-    },
-    combat_magic_2: {
-        narrative: `Another burst of mana shoots from your hands! The bolt rips through the weakened Ash Hound for <strong class="text-success">16 damage</strong>, breaking it apart into ash and embers.
-
-<strong class="text-success">⚔️ VICTORY!</strong>
-
-You earn <strong>25 EXP</strong> and find <strong>7 coins</strong> in the remains.
-
-<strong>-8 MP</strong>`,
-        choices: [
-            { id: "explore_ash", text: "Keep exploring the Ash Plains", icon: "fa-compass" },
-            { id: "return_bastion", text: "Head back to the Bastion", icon: "fa-house" }
-        ],
-        stateUpdates: {
-            combat_active: false,
-            current_enemy: null,
-            mana_change: -8,
-            exp_change: 25,
-            coins_change: 7,
-            time_advanced: true
-        }
-    },
-    combat_defend: {
-        narrative: `You brace yourself, lifting your arms to block. The Ash Hound jumps at you — you push its jaws away, taking only <strong class="text-danger">1 damage</strong> through your defense.
-
-<em>Your guard holds strong. The creature circles around you, looking for a weak spot.</em>`,
-        choices: [
-            { id: "combat_attack", text: "Counter-attack now!", icon: "fa-hammer" },
-            { id: "combat_magic", text: "Cast a Mana Bolt", icon: "fa-wand-sparkles" },
-            { id: "combat_flee", text: "Use this chance to run", icon: "fa-person-running" }
-        ],
-        stateUpdates: {
-            hp_change: -1,
-            combat_active: true,
-            time_advanced: false
-        }
-    },
-    combat_flee: {
-        narrative: `You turn around and sprint through the ash! The Ash Hound chases, snapping at your heels. Its claws scratch your back — <strong class="text-danger">3 damage</strong> — but you manage to get away.
-
-<em>You escaped! The Ash Hound's howl fades behind you.</em>
-
-You stop to catch your breath. The Bastion walls are visible in the distance.`,
-        choices: [
-            { id: "return_bastion", text: "Run back to the Bastion", icon: "fa-house" },
-            { id: "explore_ash", text: "Go deeper into the Ash Plains", icon: "fa-compass" }
-        ],
-        stateUpdates: {
-            hp_change: -3,
-            combat_active: false,
-            current_enemy: null,
-            time_advanced: true
         }
     },
     explore_ash: {
@@ -431,9 +381,7 @@ Far away, you notice a ridge of strange blue-green rocks. Could that be the star
 
 A <strong>Rust Beetle</strong> crawls out from under a burnt log, its metal shell making a grinding noise.`,
         choices: [
-            { id: "combat_attack", text: "Attack the Rust Beetle!", icon: "fa-hammer" },
-            { id: "combat_defend", text: "Take a defensive stance", icon: "fa-shield" },
-            { id: "return_bastion", text: "Back off before it sees you", icon: "fa-house" }
+            { id: "combat_flee", text: "Back away before it closes in", icon: "fa-person-running" }
         ],
         stateUpdates: {
             coins_change: 3,

@@ -5,15 +5,25 @@
 // ============================================================
 
 const GameEngine = (() => {
+    const SAVE_SCHEMA_VERSION = 2;
+    const ACTION_COSTS = {
+        buy_potion: 10,
+        buy_mana: 15,
+        heal_elara: 25
+    };
     // ---- Player State ----
     let state = {
+        saveSchemaVersion: SAVE_SCHEMA_VERSION,
         playerName: "The Scrapper",
         buildId: "survivor",
+        playerAvatar: "img/avatar_survivor.png",
         level: 1,
         hp: 50,
         maxHp: 50,
+        baseMaxHp: 50,
         mp: 30,
         maxMp: 30,
+        baseMaxMp: 30,
         exp: 0,
         expToLevel: 100,
         str: 5,
@@ -27,14 +37,21 @@ const GameEngine = (() => {
         combatActive: false,
         currentEnemy: null,
         currentEnemyHp: 0,
+        combatResolving: false,
+        guarding: false,
         currentRegion: "last_bastion",
         inventory: [
-            { id: "rusted_pipe", qty: 1 },
-            { id: "padded_clothing", qty: 1 },
-            { id: "healing_potion", qty: 1 }
+            { id: "healing_potion", qty: 2 }
         ],
-        weapon: "rusted_pipe",
-        armor: "padded_clothing",
+        equipment: {
+            head: null,
+            chest: "padded_clothing",
+            main_hand: "rusted_pipe",
+            off_hand: null,
+            accessory: null
+        },
+        dynamicItems: {},
+        cooldowns: {},
         gameStarted: false
     };
 
@@ -51,15 +68,16 @@ const GameEngine = (() => {
 
         if (buildData) {
             state.buildId = buildData.id;
+            state.playerAvatar = buildData.avatar;
             state.str = buildData.stats.str;
             state.def = buildData.stats.def;
             state.int = buildData.stats.int;
             state.agi = buildData.stats.agi;
-            state.maxHp = buildData.stats.maxHp;
-            state.hp = state.maxHp;
-            state.maxMp = buildData.stats.maxMp;
-            state.mp = state.maxMp;
+            state.baseMaxHp = buildData.stats.maxHp;
+            state.baseMaxMp = buildData.stats.maxMp;
         }
+
+        syncDerivedResources({ restore: true });
 
         UI.updateHUD(state);
         UI.updateLocation(REGIONS[state.currentRegion]);
@@ -75,8 +93,8 @@ const GameEngine = (() => {
     }
 
     function getExplicitRegionChange(choiceId) {
-        if (choiceId === "leave_bastion") return "ash_plains";
-        if (choiceId === "explore_bastion" || choiceId === "talk_silas" || choiceId === "talk_elara" || choiceId === "walk_away" || choiceId === "combat_flee") {
+        if (choiceId === "leave_bastion" || choiceId === "explore_ash") return "ash_plains";
+        if (choiceId === "return_bastion" || choiceId === "explore_bastion" || choiceId === "talk_silas" || choiceId === "talk_elara" || choiceId === "walk_away") {
             return "last_bastion";
         }
         return null;
@@ -84,6 +102,16 @@ const GameEngine = (() => {
 
     // ---- Process a Choice ----
     function processChoice(choiceId) {
+        if (choiceId === "combat_flee") {
+            attemptFlee();
+            return;
+        }
+
+        if (choiceId === "check_stats") {
+            UI.openStatsModal();
+            return;
+        }
+
         const scenario = MOCK_SCENARIOS[choiceId];
         if (!scenario && !choiceId.startsWith("sell_")) {
             UI.addNarrative("<em>The Wastes offer no response to that action... Try something else.</em>", "gm");
@@ -96,6 +124,18 @@ const GameEngine = (() => {
             return;
         }
 
+        const cost = ACTION_COSTS[choiceId];
+        if (cost && state.coins < cost) {
+            UI.showToast(`Need ${cost} coins`, "warning", "fa-coins");
+            UI.addNarrative(`You count your coins. You need <strong>${cost}</strong>, but only have <strong>${state.coins}</strong>.`, "gm");
+            return;
+        }
+
+        if (choiceId === "heal_elara" && state.hp === state.maxHp && state.mp === state.maxMp) {
+            UI.showToast("You are already fully restored", "info", "fa-heart-pulse");
+            return;
+        }
+
         // Show player's choice as a message
         const choiceText = document.querySelector(`.choice-btn[data-choice="${choiceId}"] span`);
         if (choiceText) {
@@ -104,14 +144,6 @@ const GameEngine = (() => {
 
         UI.disableChoices();
         UI.showTypingIndicator();
-
-        // Check if player attacked to show slash fx immediately
-        const isCombatAttack = scenario.stateUpdates && scenario.stateUpdates.hp_change && scenario.stateUpdates.hp_change < 0 && state.combatActive;
-        if (choiceId.includes("attack") && isCombatAttack) {
-            setTimeout(() => {
-                UI.showSlashAnimation();
-            }, 100);
-        }
 
         const delay = 600 + Math.random() * 800;
         setTimeout(() => {
@@ -135,10 +167,7 @@ const GameEngine = (() => {
                 UI.addNarrative(scenario.narrative, "gm");
             }
 
-            if (isCombatAttack && state.combatActive) {
-                // Two-phase combat: player attack → enemy turn → your turn
-                showPlayerTurnThenEnemyTurn(scenario);
-            } else if (scenario.triggerSellMenu) {
+            if (scenario.triggerSellMenu) {
                 setTimeout(() => showSellChoices(), 600);
             } else {
                 const choiceDelay = needsTransition ? 2000 : 400;
@@ -160,32 +189,203 @@ const GameEngine = (() => {
         }, delay);
     }
 
-    // ---- Two-Phase Combat Turn ----
-    function showPlayerTurnThenEnemyTurn(scenario) {
+    // ---- Dynamic Ability Combat Loop ----
+    function useAbility(abilityId) {
+        if (!state.combatActive || !state.currentEnemy || state.combatResolving) return;
+
+        const ability = ABILITIES[abilityId];
+        if (!ability) return;
+
+        if (state.mp < ability.mpCost) {
+            UI.showToast("Not enough MP!", "danger", "fa-droplet-slash");
+            return;
+        }
+
+        if (state.cooldowns && state.cooldowns[abilityId] > 0) {
+            UI.showToast(`${ability.name} is cooling down`, "warning", "fa-hourglass-half");
+            return;
+        }
+
+        if (ability.type === "heal" && state.hp >= state.maxHp) {
+            UI.showToast("HP is already full", "info", "fa-heart");
+            return;
+        }
+
+        if (!state.cooldowns) state.cooldowns = {};
+        state.combatResolving = true;
+        UI.disableChoices();
         UI.showTurnIndicator(true);
+        UI.addNarrative(ability.name, "player");
+
+        state.mp -= ability.mpCost;
+        state.cooldowns[abilityId] = ability.cooldown > 0 ? ability.cooldown + 1 : 0;
+
+        const derived = getDerivedStats();
+        let narrativeText = "";
+        const enemy = ENEMIES[state.currentEnemy];
+
+        if (ability.type === "physical" || ability.type === "magical") {
+            const isCrit = Math.random() < derived.critChance;
+            const evadeChance = 0.05; // Mock enemy evade
+            if (Math.random() < evadeChance) {
+                narrativeText = `You use <strong>${ability.name}</strong>, but the ${enemy.name} <strong class="text-warning">DODGES</strong> the attack!`;
+                UI.showFloatingNumber("MISS", "damage");
+            } else {
+                if (ability.type === "physical") {
+                    const min = derived.atkMin * ability.multiplier;
+                    const max = derived.atkMax * ability.multiplier;
+                    let dmg = Math.floor(Math.random() * (max - min + 1)) + min;
+                    if (isCrit) dmg = Math.floor(dmg * 1.5);
+                    const actualDmg = Math.max(1, dmg - enemy.defense);
+                    state.currentEnemyHp = Math.max(0, state.currentEnemyHp - actualDmg);
+
+                    narrativeText = `You drive <strong>${ability.name}</strong> into the ${enemy.name} for <strong class="text-success">${actualDmg} physical damage</strong>${isCrit ? " — critical hit." : "."}`;
+                    UI.showSlashAnimation();
+                    if (isCrit) UI.showFloatingNumber("CRIT!", "heal");
+                    else UI.showFloatingNumber(actualDmg.toString(), "damage");
+                } else {
+                    const min = derived.matkMin * ability.multiplier;
+                    const max = derived.matkMax * ability.multiplier;
+                    let dmg = Math.floor(Math.random() * (max - min + 1)) + min;
+                    if (isCrit) dmg = Math.floor(dmg * 1.5);
+                    const actualDmg = Math.max(1, dmg);
+                    state.currentEnemyHp = Math.max(0, state.currentEnemyHp - actualDmg);
+
+                    narrativeText = `<strong>${ability.name}</strong> fractures the air and hits the ${enemy.name} for <strong class="text-info">${actualDmg} magical damage</strong>${isCrit ? " — critical hit." : "."}`;
+                    UI.showManaBoltAnimation();
+                    if (isCrit) UI.showFloatingNumber("CRIT!", "heal");
+                    else UI.showFloatingNumber(actualDmg.toString(), "damage");
+                }
+            }
+            UI.updateEnemyHp(state.currentEnemyHp, enemy.maxHp);
+        } else if (ability.type === "heal") {
+            const heal = ability.healAmount;
+            const actualHeal = Math.min(heal, state.maxHp - state.hp);
+            state.hp += actualHeal;
+            narrativeText = `You use <strong>${ability.name}</strong>, restoring <strong class="text-success">${actualHeal} HP</strong>.`;
+            UI.showFloatingNumber(`+${actualHeal}`, "heal");
+        } else if (ability.type === "defend") {
+            state.guarding = true;
+            narrativeText = "You brace behind your gear and watch for the next strike. Incoming damage is reduced this round.";
+        }
+
+        UI.addNarrative(narrativeText, "gm");
+        UI.updateHUD(state);
+
+        if (state.currentEnemyHp <= 0) {
+            resolveVictory(enemy);
+        } else {
+            resolveEnemyTurn(enemy);
+        }
+    }
+
+    function tickCooldowns() {
+        Object.keys(state.cooldowns).forEach(key => {
+            state.cooldowns[key] = Math.max(0, state.cooldowns[key] - 1);
+        });
+    }
+
+    function resolveEnemyTurn(enemy) {
+        UI.showTurnIndicator(false);
 
         setTimeout(() => {
-            UI.showTurnIndicator(false); // Enemy's Turn
+            tickCooldowns();
+            const derived = getDerivedStats();
+            const isCrit = Math.random() < 0.1;
 
+            if (Math.random() < derived.evadeChance) {
+                UI.addNarrative(`The <strong>${enemy.name}</strong> lunges, but you slip clear of the strike.`, "gm");
+                UI.showFloatingNumber("DODGED", "heal");
+            } else {
+                let baseDmg = enemy.attack || 5;
+                if (isCrit) baseDmg = Math.floor(baseDmg * 1.5);
+
+                const defenseMultiplier = (100 - derived.drPercent) / 100;
+                const guardMultiplier = state.guarding ? 0.45 : 1;
+                const finalDmg = Math.max(1, Math.floor(baseDmg * defenseMultiplier * guardMultiplier));
+
+                state.hp = Math.max(0, state.hp - finalDmg);
+                UI.flashDamage();
+                UI.addNarrative(`The <strong>${enemy.name}</strong> hits for <strong class="text-danger">${finalDmg} damage</strong>${state.guarding ? " through your guard" : ""}${isCrit ? " — a critical hit." : "."}`, "gm");
+                UI.showFloatingNumber(`-${finalDmg}`, "damage");
+            }
+
+            state.guarding = false;
+            UI.updateHUD(state);
+
+            if (state.hp <= 0) {
+                state.combatResolving = false;
+                setTimeout(handleDeath, 700);
+                return;
+            }
+
+            state.combatResolving = false;
             setTimeout(() => {
-                const enemy = ENEMIES[state.currentEnemy];
-                if (enemy) {
-                    const enemyDamage = Math.abs(scenario.stateUpdates.hp_change);
-                    UI.addNarrative(
-                        `The <strong>${enemy.name}</strong> retaliates — lunging at you for <strong class="text-danger">${enemyDamage} damage</strong>! ` +
-                        `<span class="enemy-status">${enemy.name} HP: ${state.currentEnemyHp}/${enemy.maxHp}</span>`,
-                        "gm"
-                    );
-                }
+                UI.showTurnIndicator(true);
+                UI.updateHotbar(state);
+                UI.showChoices([{ id: "combat_flee", text: "Attempt to flee", icon: "fa-person-running" }]);
+            }, 350);
+        }, 850);
+    }
 
-                setTimeout(() => {
-                    if (scenario.choices) {
-                        UI.showTurnIndicator(true); // Your Turn
-                        UI.showChoices(scenario.choices);
-                    }
-                }, 1000);
-            }, 800);
-        }, 1200);
+    function resolveVictory(enemy) {
+        setTimeout(() => {
+            const exp = enemy.expReward || 0;
+            const reward = enemy.coinReward || { min: 0, max: 0 };
+            const coins = Math.floor(Math.random() * (reward.max - reward.min + 1)) + reward.min;
+
+            state.exp += exp;
+            state.coins += coins;
+            if (enemy.lootItemId) addItemToInventory(enemy.lootItemId, true);
+            state.combatActive = false;
+            state.combatResolving = false;
+            state.currentEnemy = null;
+            state.currentEnemyHp = 0;
+            advanceTime();
+            checkLevelUp();
+
+            const lootText = enemy.lootItemId && ITEMS[enemy.lootItemId]
+                ? ` You recover <strong>${ITEMS[enemy.lootItemId].name}</strong>.`
+                : "";
+            UI.addNarrative(`<strong class="text-success">Encounter cleared.</strong> The ${enemy.name} falls. You gain <strong>${exp} EXP</strong> and <strong>${coins} coins</strong>.${lootText}`, "gm");
+            UI.hideEnemyPanel();
+            UI.hideTurnIndicator();
+            UI.updateHUD(state);
+            UI.showChoices([
+                { id: "explore_ash", text: "Push deeper into the Ash Plains", icon: "fa-compass" },
+                { id: "return_bastion", text: "Return to the Last Bastion", icon: "fa-house" }
+            ]);
+        }, 650);
+    }
+
+    function attemptFlee() {
+        if (!state.combatActive || !state.currentEnemy || state.combatResolving) return;
+
+        const enemy = ENEMIES[state.currentEnemy];
+        const fleeChance = Math.min(0.85, 0.25 + getDerivedStats().totalAgi * 0.06);
+        state.combatResolving = true;
+        UI.disableChoices();
+        UI.addNarrative("Attempt to flee", "player");
+
+        if (Math.random() < fleeChance) {
+            state.combatActive = false;
+            state.combatResolving = false;
+            state.currentEnemy = null;
+            state.currentEnemyHp = 0;
+            advanceTime();
+            UI.hideEnemyPanel();
+            UI.hideTurnIndicator();
+            UI.updateHUD(state);
+            UI.addNarrative(`You break the ${enemy.name}'s line of sight and retreat across the ash.`, "gm");
+            UI.showChoices([
+                { id: "return_bastion", text: "Return to the Last Bastion", icon: "fa-house" },
+                { id: "explore_ash", text: "Regroup and keep exploring", icon: "fa-compass" }
+            ]);
+            return;
+        }
+
+        UI.addNarrative(`The ${enemy.name} cuts off your escape.`, "gm");
+        resolveEnemyTurn(enemy);
     }
 
     // ---- Apply state updates from scenario ----
@@ -218,7 +418,7 @@ const GameEngine = (() => {
         }
 
         if (updates.coins_change) {
-            state.coins += updates.coins_change;
+            state.coins = Math.max(0, state.coins + updates.coins_change);
             if (updates.coins_change > 0) {
                 UI.showToast(`+${updates.coins_change} Coins`, "success", "fa-coins");
                 UI.showFloatingNumber(`+${updates.coins_change}`, "coins");
@@ -234,7 +434,7 @@ const GameEngine = (() => {
         }
 
         if (updates.addItem) {
-            addItemToInventory(updates.addItem);
+            addItemToInventory(updates.addItem, true);
         }
 
         // Combat state
@@ -244,23 +444,17 @@ const GameEngine = (() => {
                 const enemy = ENEMIES[updates.current_enemy];
                 state.currentEnemy = updates.current_enemy;
                 state.currentEnemyHp = enemy.hp;
+                state.combatResolving = false;
+                state.guarding = false;
                 UI.showEnemyPanel(enemy);
-            }
-        }
-
-        // Enemy HP updates from combat narrative
-        if (state.combatActive && state.currentEnemy) {
-            const enemy = ENEMIES[state.currentEnemy];
-            if (updates.hp_change !== undefined && updates.combat_active) {
-                const playerDamage = Math.floor(state.str * 1.5 + Math.random() * 5);
-                state.currentEnemyHp = Math.max(0, state.currentEnemyHp - playerDamage);
-                UI.updateEnemyHp(state.currentEnemyHp, enemy.maxHp);
             }
         }
 
         if (updates.combat_active === false) {
             state.currentEnemy = null;
             state.currentEnemyHp = 0;
+            state.combatResolving = false;
+            state.guarding = false;
             UI.hideEnemyPanel();
             UI.hideTurnIndicator();
         }
@@ -306,15 +500,15 @@ const GameEngine = (() => {
             state.statPoints += 3;
             state.expToLevel = Math.floor(state.expToLevel * 1.3);
 
-            state.maxHp += 5;
-            state.maxMp += 3;
-            state.hp = state.maxHp;
-            state.mp = state.maxMp;
+            state.baseMaxHp += 5;
+            state.baseMaxMp += 3;
 
             state.str += 1;
             state.def += 1;
             state.int += 1;
             state.agi += 1;
+
+            syncDerivedResources({ restore: true });
 
             UI.showLevelUpOverlay(state.level);
         }
@@ -326,6 +520,8 @@ const GameEngine = (() => {
         state.mp = Math.floor(state.maxMp * 0.3);
         state.coins = Math.max(0, state.coins - Math.floor(state.coins * 0.2));
         state.combatActive = false;
+        state.combatResolving = false;
+        state.guarding = false;
         state.currentEnemy = null;
         state.currentEnemyHp = 0;
         state.timePhase = 0;
@@ -349,13 +545,75 @@ It is now <strong>Morning of Day ${state.day}</strong>.`, "gm");
         }, 500);
     }
 
-    // ---- Inventory ----
-    function addItemToInventory(itemId) {
-        const existing = state.inventory.find(i => i.id === itemId);
+    // ---- Inventory & Loot Engine ----
+    const AFFIXES = {
+        "of the Bear": { str: 2, hp: 10, rarityBump: true },
+        "of the Owl": { int: 2, mp: 10, rarityBump: true },
+        "of the Fox": { agi: 2, rarityBump: true },
+        "of the Turtle": { def: 2, rarityBump: true },
+        "Heavy": { str: 1, def: 1, rarityBump: false },
+        "Sharpened": { str: 2, rarityBump: false },
+        "Glowing": { int: 1, mp: 5, rarityBump: false }
+    };
+
+    function generateAffixedItem(baseItemId) {
+        const baseItem = ITEMS[baseItemId];
+        if (!baseItem || baseItem.type !== "equipment") return baseItemId;
+
+        // 40% chance to drop with an affix
+        if (Math.random() > 0.4) return baseItemId;
+
+        const affixNames = Object.keys(AFFIXES);
+        const randomAffix = affixNames[Math.floor(Math.random() * affixNames.length)];
+        const affixStats = AFFIXES[randomAffix];
+
+        const isPrefix = ["Heavy", "Sharpened", "Glowing"].includes(randomAffix);
+        const newName = isPrefix ? `${randomAffix} ${baseItem.name}` : `${baseItem.name} ${randomAffix}`;
+        const newId = `${baseItemId}_${Date.now()}_${Math.floor(Math.random() * 1000)}`;
+
+        const newItem = JSON.parse(JSON.stringify(baseItem));
+        newItem.name = newName;
+        newItem.id = newId;
+        newItem.isDynamic = true;
+        newItem.baseId = baseItemId;
+
+        if (!newItem.bonusStat) newItem.bonusStat = {};
+        for (const [stat, val] of Object.entries(affixStats)) {
+            if (stat === 'rarityBump') {
+                if (val && newItem.rarity === "common") newItem.rarity = "uncommon";
+                else if (val && newItem.rarity === "uncommon") newItem.rarity = "rare";
+                continue;
+            }
+            newItem.bonusStat[stat] = (newItem.bonusStat[stat] || 0) + val;
+        }
+
+        if (newItem.sellPrice) {
+            newItem.sellPrice.min = Math.floor(newItem.sellPrice.min * 1.5);
+            newItem.sellPrice.max = Math.floor(newItem.sellPrice.max * 1.5);
+        } else {
+            newItem.sellPrice = { min: 10, max: 20 };
+        }
+
+        state.dynamicItems[newId] = newItem;
+        ITEMS[newId] = newItem;
+
+        return newId;
+    }
+
+    function addItemToInventory(itemId, rollAffix = false) {
+        let finalItemId = itemId;
+        const itemTemplate = ITEMS[itemId];
+
+        // Affixes are rolled only when a new loot instance enters the inventory.
+        if (rollAffix && itemTemplate && itemTemplate.type === "equipment" && !itemTemplate.isDynamic) {
+            finalItemId = generateAffixedItem(itemId);
+        }
+
+        const existing = state.inventory.find(i => i.id === finalItemId);
         if (existing) {
             existing.qty++;
         } else {
-            state.inventory.push({ id: itemId, qty: 1 });
+            state.inventory.push({ id: finalItemId, qty: 1 });
         }
     }
 
@@ -366,14 +624,23 @@ It is now <strong>Morning of Day ${state.day}</strong>.`, "gm");
         const item = ITEMS[itemId];
         if (!item || item.type !== "consumable") return false;
 
-        if (item.effect.hp) {
-            state.hp = Math.min(state.maxHp, state.hp + item.effect.hp);
-            UI.showToast(`+${item.effect.hp} HP`, "success", "fa-heart");
-            UI.showFloatingNumber(`+${item.effect.hp}`, "heal");
+        const canRestoreHp = item.effect.hp && state.hp < state.maxHp;
+        const canRestoreMp = item.effect.mp && state.mp < state.maxMp;
+        if (!canRestoreHp && !canRestoreMp) {
+            UI.showToast("That item would have no effect", "info", item.icon);
+            return false;
         }
-        if (item.effect.mp) {
-            state.mp = Math.min(state.maxMp, state.mp + item.effect.mp);
-            UI.showToast(`+${item.effect.mp} MP`, "success", "fa-droplet");
+
+        if (canRestoreHp) {
+            const restored = Math.min(item.effect.hp, state.maxHp - state.hp);
+            state.hp += restored;
+            UI.showToast(`+${restored} HP`, "success", "fa-heart");
+            UI.showFloatingNumber(`+${restored}`, "heal");
+        }
+        if (canRestoreMp) {
+            const restored = Math.min(item.effect.mp, state.maxMp - state.mp);
+            state.mp += restored;
+            UI.showToast(`+${restored} MP`, "success", "fa-droplet");
         }
 
         slot.qty--;
@@ -383,6 +650,60 @@ It is now <strong>Morning of Day ${state.day}</strong>.`, "gm");
 
         UI.updateHUD(state);
         UI.updateInventoryModal(state);
+
+        if (state.combatActive && state.currentEnemy && !state.combatResolving) {
+            state.combatResolving = true;
+            UI.disableChoices();
+            resolveEnemyTurn(ENEMIES[state.currentEnemy]);
+        }
+        return true;
+    }
+
+    // ---- Equipment ----
+    function equipItem(itemId) {
+        const item = ITEMS[itemId];
+        if (!item || item.type !== "equipment" || !item.equipSlot) return false;
+
+        const invSlot = state.inventory.find(i => i.id === itemId);
+        if (!invSlot || invSlot.qty <= 0) return false;
+
+        // Remove 1 from inventory
+        invSlot.qty--;
+        if (invSlot.qty <= 0) {
+            state.inventory = state.inventory.filter(i => i.id !== itemId);
+        }
+
+        const slot = item.equipSlot;
+        // Unequip currently equipped item in this slot
+        if (state.equipment[slot]) {
+            addItemToInventory(state.equipment[slot]);
+        }
+
+        state.equipment[slot] = itemId;
+
+        syncDerivedResources();
+
+        UI.updateHUD(state);
+        if (typeof UI.updateInventoryModal === "function") {
+            UI.updateInventoryModal(state);
+        }
+        UI.showToast(`Equipped ${item.name}`, "success", item.icon);
+        return true;
+    }
+
+    function unequipItem(slot) {
+        const itemId = state.equipment[slot];
+        if (!itemId) return false;
+
+        state.equipment[slot] = null;
+        addItemToInventory(itemId);
+
+        syncDerivedResources();
+
+        UI.updateHUD(state);
+        if (typeof UI.updateInventoryModal === "function") {
+            UI.updateInventoryModal(state);
+        }
         return true;
     }
 
@@ -430,6 +751,79 @@ It is now <strong>Morning of Day ${state.day}</strong>.`, "gm");
         UI.showChoices(choices);
     }
 
+    // ---- RPG Derived Stats Engine ----
+    function getEquipmentBonusStats() {
+        let bonuses = { str: 0, def: 0, int: 0, agi: 0, hp: 0, mp: 0 };
+        for (const slot in state.equipment) {
+            const itemId = state.equipment[slot];
+            if (itemId && ITEMS[itemId] && ITEMS[itemId].bonusStat) {
+                const b = ITEMS[itemId].bonusStat;
+                if (b.str) bonuses.str += b.str;
+                if (b.def) bonuses.def += b.def;
+                if (b.int) bonuses.int += b.int;
+                if (b.agi) bonuses.agi += b.agi;
+                if (b.hp) bonuses.hp += b.hp;
+                if (b.mp) bonuses.mp += b.mp;
+            }
+        }
+        return bonuses;
+    }
+
+    function getDerivedStats() {
+        const gear = getEquipmentBonusStats();
+
+        const totalStr = state.str + gear.str;
+        const totalDef = state.def + gear.def;
+        const totalInt = state.int + gear.int;
+        const totalAgi = state.agi + gear.agi;
+
+        const computedMaxHp = state.baseMaxHp + gear.hp;
+        const computedMaxMp = state.baseMaxMp + gear.mp;
+
+        // ATK (Physical Damage Range)
+        // Base dmg 1-3. STR adds +1 to min, +2 to max.
+        const atkMin = 1 + totalStr;
+        const atkMax = 3 + (totalStr * 2);
+
+        // MATK (Magical Damage Range)
+        const matkMin = 1 + (totalInt * 2);
+        const matkMax = 4 + (totalInt * 3);
+
+        // Damage Reduction (from DEF). Each DEF = 1.5% reduction. Max 60%.
+        const drPercent = Math.min(60, totalDef * 1.5);
+
+        // Critical Hit Chance (from AGI). Base 3%. Each AGI = 0.5%. Max 50%.
+        const critChance = Math.min(0.50, 0.03 + (totalAgi * 0.005));
+
+        // Evasion Chance (from AGI). Base 2%. Each AGI = 0.8%. Max 40%.
+        const evadeChance = Math.min(0.40, 0.02 + (totalAgi * 0.008));
+
+
+        return {
+            maxHp: computedMaxHp,
+            maxMp: computedMaxMp,
+            totalStr,
+            totalDef,
+            totalInt,
+            totalAgi,
+            atkMin,
+            atkMax,
+            matkMin,
+            matkMax,
+            drPercent,
+            critChance: critChance,
+            evadeChance: evadeChance
+        };
+    }
+
+    function syncDerivedResources({ restore = false } = {}) {
+        const derived = getDerivedStats();
+        state.maxHp = derived.maxHp;
+        state.maxMp = derived.maxMp;
+        state.hp = restore ? state.maxHp : Math.min(state.hp, state.maxHp);
+        state.mp = restore ? state.maxMp : Math.min(state.mp, state.maxMp);
+    }
+
     // ---- Stat Allocation ----
     function allocateStat(statName) {
         if (state.statPoints <= 0) return false;
@@ -438,21 +832,26 @@ It is now <strong>Morning of Day ${state.day}</strong>.`, "gm");
         state[statName]++;
         state.statPoints--;
 
+        // Sync HP/MP immediately on level up allocation
         if (statName === "int") {
-            state.maxMp += 2;
-            state.mp = Math.min(state.maxMp, state.mp + 2);
+            state.baseMaxMp += 5;
         }
 
         if (statName === "str") {
-            state.maxHp += 1;
+            state.baseMaxHp += 5;
         }
 
+        const previousHp = state.hp;
+        const previousMp = state.mp;
+        syncDerivedResources();
+        if (statName === "str") state.hp = Math.min(state.maxHp, previousHp + 5);
+        if (statName === "int") state.mp = Math.min(state.maxMp, previousMp + 5);
+
         UI.updateHUD(state);
-        UI.updateStatsModal(state);
+        UI.updateStatsModal(state, getDerivedStats()); // Pass derived stats to UI
         UI.showToast(`+1 ${statName.toUpperCase()}`, "success", "fa-arrow-up");
         return true;
     }
-
     // ---- Process custom text input ----
     function processCustomInput(text) {
         if (!text.trim()) return;
@@ -465,8 +864,26 @@ It is now <strong>Morning of Day ${state.day}</strong>.`, "gm");
             UI.hideTypingIndicator();
 
             const lower = text.toLowerCase();
+            if (state.combatActive) {
+                if (lower.includes("flee") || lower.includes("run")) return processChoice("combat_flee");
+                if (lower.includes("defend") || lower.includes("guard") || lower.includes("brace")) return useAbility("guard");
+                if (lower.includes("magic") || lower.includes("mana") || lower.includes("spell")) return useAbility("mana_bolt");
+                if (lower.includes("heal") || lower.includes("potion")) {
+                    if (useItem("healing_potion")) {
+                        UI.addNarrative("You drink a Healing Potion before the enemy can close in.", "gm");
+                    }
+                    return;
+                }
+                if (lower.includes("attack") || lower.includes("fight") || lower.includes("hit")) return useAbility("strike");
+
+                UI.addNarrative("<em>The enemy gives you no room for that. Attack, cast, guard, heal, or flee.</em>", "gm");
+                UI.showChoices([{ id: "combat_flee", text: "Attempt to flee", icon: "fa-person-running" }]);
+                return;
+            }
+
             if (lower.includes("attack") || lower.includes("fight") || lower.includes("hit")) {
-                if (state.combatActive) return processChoice("combat_attack");
+                UI.addNarrative("<em>You test your grip, but there is nothing here to fight.</em>", "gm");
+                return;
             }
             if (lower.includes("heal") || lower.includes("potion")) {
                 if (useItem("healing_potion")) {
@@ -475,7 +892,9 @@ It is now <strong>Morning of Day ${state.day}</strong>.`, "gm");
                 }
             }
             if (lower.includes("sell")) return showSellChoices();
-            if (lower.includes("explore") || lower.includes("look")) return processChoice("explore_bastion");
+            if (lower.includes("explore") || lower.includes("look")) {
+                return processChoice(state.currentRegion === "ash_plains" ? "explore_ash" : "explore_bastion");
+            }
             if (lower.includes("leave") || lower.includes("go out") || lower.includes("ash plains")) return processChoice("leave_bastion");
             if (lower.includes("save")) return UI.openSaveModal();
 
@@ -483,21 +902,90 @@ It is now <strong>Morning of Day ${state.day}</strong>.`, "gm");
         }, 800);
     }
 
-    // ---- Save / Load System (localStorage for now) ----
-    function saveGame(slotId) {
-        const saveData = {
-            state: { ...state },
+    // ---- Save / Load System (localStorage for the frontend prototype) ----
+    function createSaveData(slotId) {
+        return {
+            schemaVersion: SAVE_SCHEMA_VERSION,
+            state: JSON.parse(JSON.stringify(state)),
             timestamp: new Date().toISOString(),
-            slotId: slotId
+            slotId
+        };
+    }
+
+    function saveGame(slotId, { silent = false } = {}) {
+        if (!state.gameStarted) {
+            if (!silent) UI.showToast("Start a game before saving", "warning", "fa-floppy-disk");
+            return false;
+        }
+
+        const saveData = {
+            ...createSaveData(slotId)
         };
         try {
             localStorage.setItem(`tsw_save_${slotId}`, JSON.stringify(saveData));
-            UI.showToast(`Game saved to Slot ${slotId}!`, "success", "fa-floppy-disk");
-            UI.updateSaveModal();
+            if (!silent) {
+                UI.showToast(`Saved to slot ${slotId}`, "success", "fa-floppy-disk");
+                UI.updateSaveModal();
+            }
             return true;
         } catch (e) {
-            UI.showToast("Save failed!", "danger", "fa-triangle-exclamation");
+            if (!silent) UI.showToast("Save failed. Check browser storage.", "danger", "fa-triangle-exclamation");
             return false;
+        }
+    }
+
+    function autoSave() {
+        return saveGame("auto", { silent: true });
+    }
+
+    function normalizeLoadedState(savedState, schemaVersion) {
+        Object.assign(state, savedState);
+        state.saveSchemaVersion = SAVE_SCHEMA_VERSION;
+        const allowedBuilds = ["bruiser", "scout", "scholar", "vanguard", "survivor"];
+        state.buildId = allowedBuilds.includes(state.buildId) ? state.buildId : "survivor";
+        state.playerAvatar = `img/avatar_${state.buildId}.png`;
+        state.playerName = String(state.playerName || "The Scrapper").slice(0, 24);
+        state.currentRegion = REGIONS[state.currentRegion] ? state.currentRegion : "last_bastion";
+        state.timePhase = Math.max(0, Math.min(3, Number(state.timePhase) || 0));
+        state.day = Math.max(1, Number(state.day) || 1);
+        state.level = Math.max(1, Number(state.level) || 1);
+        state.inventory = Array.isArray(state.inventory)
+            ? state.inventory.filter(slot => slot && ITEMS[slot.id] && Number(slot.qty) > 0).map(slot => ({ id: slot.id, qty: Math.floor(Number(slot.qty)) }))
+            : [];
+        state.equipment = {
+            head: null,
+            chest: null,
+            main_hand: null,
+            off_hand: null,
+            accessory: null,
+            ...(state.equipment || {})
+        };
+        Object.keys(state.equipment).forEach(slot => {
+            const item = ITEMS[state.equipment[slot]];
+            if (!item || item.type !== "equipment" || item.equipSlot !== slot) state.equipment[slot] = null;
+        });
+        state.dynamicItems = state.dynamicItems || {};
+        state.cooldowns = state.cooldowns || {};
+        state.combatResolving = false;
+        state.guarding = false;
+        if (!state.combatActive || !state.currentEnemy || !ENEMIES[state.currentEnemy]) {
+            state.combatActive = false;
+            state.currentEnemy = null;
+            state.currentEnemyHp = 0;
+        } else {
+            state.currentEnemyHp = Math.max(1, Math.min(Number(state.currentEnemyHp) || ENEMIES[state.currentEnemy].maxHp, ENEMIES[state.currentEnemy].maxHp));
+        }
+
+        const gear = getEquipmentBonusStats();
+        if (!state.baseMaxHp) state.baseMaxHp = Math.max(1, (state.maxHp || 50) - gear.hp);
+        if (!state.baseMaxMp) state.baseMaxMp = Math.max(0, (state.maxMp || 30) - gear.mp);
+        syncDerivedResources();
+        state.hp = Math.max(0, Math.min(state.hp, state.maxHp));
+        state.mp = Math.max(0, Math.min(state.mp, state.maxMp));
+        state.coins = Math.max(0, Number(state.coins) || 0);
+
+        if (!schemaVersion || schemaVersion < SAVE_SCHEMA_VERSION) {
+            UI.showToast("Older save upgraded for this version", "info", "fa-wrench");
         }
     }
 
@@ -507,21 +995,46 @@ It is now <strong>Morning of Day ${state.day}</strong>.`, "gm");
             if (!raw) return false;
 
             const saveData = JSON.parse(raw);
-            Object.assign(state, saveData.state);
+            if (!saveData || !saveData.state) throw new Error("Invalid save shape");
+
+            // Restore dynamic items to global definitions
+            if (saveData.state.dynamicItems) {
+                Object.values(saveData.state.dynamicItems).forEach(item => {
+                    ITEMS[item.id] = item;
+                });
+            }
+            normalizeLoadedState(saveData.state, saveData.schemaVersion);
+
             applyTimeTheme();
 
-            // Go to game view physically
-            document.getElementById("main-menu-screen").style.display = "none";
+            const mainMenu = document.getElementById("main-menu-screen");
+            mainMenu.classList.remove("active");
+            mainMenu.style.display = "none";
             document.getElementById("game-container").style.display = "flex";
 
+            UI.resetNarrative();
             UI.updateHUD(state);
             UI.updateLocation(REGIONS[state.currentRegion]);
-            UI.showToast(`Loaded from Slot ${slotId}!`, "success", "fa-upload");
-            UI.addNarrative(`<em><strong>— Game Loaded —</strong> Welcome back, Scrapper. It is ${TIME_PHASES[state.timePhase]} of Day ${state.day}.</em>`, "gm");
-            UI.showChoices([
-                { id: "explore_bastion", text: "Look around", icon: "fa-magnifying-glass" },
-                { id: "leave_bastion", text: "Head to the Ash Plains", icon: "fa-person-walking" }
-            ]);
+            UI.showToast(slotId === "auto" ? "Continued from autosave" : `Loaded slot ${slotId}`, "success", "fa-upload");
+            UI.addNarrative(`<em><strong>Field record restored.</strong> Welcome back, ${state.playerName}. It is ${TIME_PHASES[state.timePhase]} of Day ${state.day}.</em>`, "gm");
+
+            if (state.combatActive && state.currentEnemy && ENEMIES[state.currentEnemy]) {
+                UI.showEnemyPanel(ENEMIES[state.currentEnemy]);
+                UI.updateEnemyHp(state.currentEnemyHp, ENEMIES[state.currentEnemy].maxHp);
+                UI.showTurnIndicator(true);
+                UI.updateHotbar(state);
+                UI.showChoices([{ id: "combat_flee", text: "Attempt to flee", icon: "fa-person-running" }]);
+            } else if (state.currentRegion === "ash_plains") {
+                UI.showChoices([
+                    { id: "explore_ash", text: "Explore the Ash Plains", icon: "fa-compass" },
+                    { id: "return_bastion", text: "Return to the Last Bastion", icon: "fa-house" }
+                ]);
+            } else {
+                UI.showChoices([
+                    { id: "explore_bastion", text: "Explore the Bastion", icon: "fa-magnifying-glass" },
+                    { id: "leave_bastion", text: "Head to the Ash Plains", icon: "fa-person-walking" }
+                ]);
+            }
             return true;
         } catch (e) {
             UI.showToast("Load failed!", "danger", "fa-triangle-exclamation");
@@ -537,27 +1050,31 @@ It is now <strong>Morning of Day ${state.day}</strong>.`, "gm");
 
     function getSaveSlots() {
         const slots = [];
-        for (let i = 1; i <= 5; i++) {
-            const raw = localStorage.getItem(`tsw_save_${i}`);
+        const slotIds = ["auto", 1, 2, 3, 4, 5];
+        slotIds.forEach(id => {
+            const raw = localStorage.getItem(`tsw_save_${id}`);
             if (raw) {
                 try {
                     const data = JSON.parse(raw);
                     slots.push({
-                        id: i,
+                        id,
+                        label: id === "auto" ? "Autosave" : `Slot ${id}`,
                         filled: true,
                         level: data.state.level,
                         day: data.state.day,
                         coins: data.state.coins,
                         timePhase: data.state.timePhase,
+                        playerName: data.state.playerName || "The Scrapper",
+                        buildId: data.state.buildId || "survivor",
                         timestamp: data.timestamp
                     });
                 } catch (e) {
-                    slots.push({ id: i, filled: false });
+                    slots.push({ id, label: id === "auto" ? "Autosave" : `Slot ${id}`, filled: false, corrupt: true });
                 }
             } else {
-                slots.push({ id: i, filled: false });
+                slots.push({ id, label: id === "auto" ? "Autosave" : `Slot ${id}`, filled: false });
             }
-        }
+        });
         return slots;
     }
 
@@ -569,11 +1086,17 @@ It is now <strong>Morning of Day ${state.day}</strong>.`, "gm");
         allocateStat,
         useItem,
         saveGame,
+        autoSave,
         loadGame,
         deleteSave,
         getSaveSlots,
-        getState: () => ({ ...state }),
-        getInventory: () => [...state.inventory]
+        getState: () => JSON.parse(JSON.stringify(state)),
+        getInventory: () => JSON.parse(JSON.stringify(state.inventory)),
+        getEquipment: () => ({ ...state.equipment }),
+        getDerivedStats,
+        equipItem,
+        unequipItem,
+        useAbility
     };
 })();
 
@@ -585,12 +1108,13 @@ const ParticleEngine = (() => {
     let particles = [];
     let animFrame;
     let timePhase = 0;
+    let paused = false;
 
     const PARTICLE_PALETTES = {
-        0: ["#ffd700", "#ffaa00", "#ffffff", "#ffe4a0"],
-        1: ["#ffffff", "#c8deff", "#ffe4b5", "#87ceeb"],
-        2: ["#ff6b35", "#ff3d00", "#ffa040", "#cc5500"],
-        3: ["#4060ff", "#6080ff", "#8090c0", "#2040a0"]
+        0: ["#b99a52", "#d8d2c2", "#8f7a4c"],
+        1: ["#d8d2c2", "#aeb1a8", "#b99a52"],
+        2: ["#d56a3a", "#b99a52", "#8f5d45"],
+        3: ["#72e3cc", "#73918b", "#4f6d69"]
     };
 
     const PARTICLE_COUNT = 50;
@@ -614,7 +1138,7 @@ const ParticleEngine = (() => {
                 if (animFrame) cancelAnimationFrame(animFrame);
                 animFrame = null;
             } else {
-                if (!animFrame) animate();
+                if (!animFrame && !paused) animate();
             }
         });
 
@@ -657,7 +1181,10 @@ const ParticleEngine = (() => {
     }
 
     function animate() {
-        if (!ctx || !canvas) return;
+        if (!ctx || !canvas || paused) {
+            animFrame = null;
+            return;
+        }
         ctx.clearRect(0, 0, canvas.width, canvas.height);
 
         const w = canvas.width;
@@ -698,5 +1225,16 @@ const ParticleEngine = (() => {
         animFrame = requestAnimationFrame(animate);
     }
 
-    return { init, setTimePhase };
+    function setPaused(shouldPause) {
+        paused = shouldPause;
+        if (paused) {
+            if (animFrame) cancelAnimationFrame(animFrame);
+            animFrame = null;
+            if (ctx && canvas) ctx.clearRect(0, 0, canvas.width, canvas.height);
+        } else if (!animFrame && !document.hidden) {
+            animate();
+        }
+    }
+
+    return { init, setTimePhase, setPaused };
 })();

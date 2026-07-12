@@ -24,7 +24,7 @@ This replaces the historical PDF design in which an LLM calculates outcomes and 
 
 ```mermaid
 flowchart LR
-    UI["React client"] -->|"versioned command or free text"| API["FastAPI turn API"]
+    UI["Vanilla browser client"] -->|"versioned command or free text"| API["FastAPI turn API"]
     API --> TURN["Turn service"]
     TURN --> INTENT["Intent interpreter"]
     TURN --> ENGINE["Deterministic game engine"]
@@ -226,7 +226,7 @@ The narrator can control prose, speaker, tone, and approved presentation cues. I
 
 ## Frontend boundary
 
-The target client is React, TypeScript, and Vite, migrated incrementally while preserving the current art direction. It owns transient presentation state such as open panels, animation progress, input drafts, and pending/retry indicators. It does not own authoritative game rules.
+The target client uses semantic HTML, modular vanilla JavaScript, and project-owned CSS under the canonical design system. npm may provide tests, bundling, linting, or narrowly scoped libraries without introducing a UI framework. The client owns transient presentation state such as open panels, animation progress, input drafts, and pending/retry indicators. It does not own authoritative game rules.
 
 The client renders a player-visible projection rather than the internal aggregate:
 
@@ -280,7 +280,7 @@ Developer tooling should expose a trace view for a selected turn without reveali
 
 1. Capture the current visual flow and intended behavior with tests.
 2. Fix or remove the unfinished dual combat/save feedback regressions before treating the prototype as a baseline.
-3. Establish React/TypeScript/Vite and port the UI incrementally behind a mock game service.
+3. Establish the Bastion Field Rig design system, split the vanilla scripts into understandable modules over time, and keep UI work behind a mock game-service boundary.
 4. Port rules and catalogs into the pure Python engine, using golden fixtures from the static slice.
 5. Add persistence and the turn API.
 6. Replace mock calls with the typed API while retaining deterministic fallback fixtures.
@@ -292,12 +292,10 @@ Developer tooling should expose a trace view for a selected turn without reveali
 - [FastAPI request bodies](https://fastapi.tiangolo.com/tutorial/body/)
 - [Pydantic models](https://docs.pydantic.dev/latest/concepts/models/)
 - [pgvector](https://github.com/pgvector/pgvector)
-- [React incremental adoption](https://react.dev/learn/add-react-to-an-existing-project)
-- [Vite guide](https://vite.dev/guide/)
-- [TypeScript `allowJs`](https://www.typescriptlang.org/tsconfig/allowJs.html)
 - [LangChain retrieval architectures](https://docs.langchain.com/oss/python/langchain/retrieval)
 
 ## Decision records
 
 - [ADR 0001: Deterministic backend authority](decisions/0001-deterministic-backend-authority.md)
 - [ADR 0002: Foundation stack and content sources](decisions/0002-foundation-stack-and-content-sources.md)
+- [ADR 0003: Vanilla frontend and learning-first scope](decisions/0003-vanilla-frontend-and-learning-first-scope.md)

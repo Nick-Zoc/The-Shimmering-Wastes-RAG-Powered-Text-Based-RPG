@@ -5,18 +5,21 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="description"
-        content="The Shimmering Wastes — An idle RPG text-based adventure game set in a post-magical-apocalypse world.">
+        content="The Shimmering Wastes — a text RPG expedition through a post-magical-apocalypse world.">
     <title>The Shimmering Wastes — RPG</title>
+    <link rel="icon" href="img/favicon.svg" type="image/svg+xml">
 
     <!-- Bootstrap 5 CSS -->
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
     <!-- Font Awesome 6 -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
     <!-- Game Styles -->
-    <link rel="stylesheet" href="css/style.css">
+    <link rel="stylesheet" href="css/style.css?v=20260712d">
+    <link rel="stylesheet" href="css/design-system.css?v=20260712d">
 </head>
 
 <body class="time-morning">
+    <a class="skip-link" href="#narrative-container">Skip to expedition log</a>
 
     <!-- ========== PARTICLE CANVAS ========== -->
     <canvas id="particle-canvas"></canvas>
@@ -36,7 +39,7 @@
     <audio id="bg-music" loop>
         <source src="audio/bg_music.mp3" type="audio/mpeg">
     </audio>
-    <button id="music-toggle" class="music-btn" title="Toggle Music">
+    <button id="music-toggle" class="music-btn" type="button" title="Toggle Music" aria-label="Toggle ambient music" aria-pressed="false">
         <i class="fa-solid fa-volume-xmark" id="music-icon"></i>
     </button>
 
@@ -44,11 +47,16 @@
     <div id="main-menu-screen" class="screen-layer active">
         <div class="menu-bg" style="background-image: url('img/main_menu_bg.png');"></div>
         <div class="menu-content">
-            <h1 class="game-title">The Shimmering Wastes</h1>
-            <p class="game-subtitle">A Text-Based Idle RPG</p>
+            <div class="menu-kicker">Bastion Field Record // 07-A</div>
+            <h1 class="game-title"><span>The Shimmering</span> Wastes</h1>
+            <p class="game-subtitle">A choice-driven expedition beyond the last safe wall.</p>
+            <div class="menu-status" aria-label="Expedition status">
+                <span><i class="fa-solid fa-tower-observation"></i> Bastion link stable</span>
+                <span><i class="fa-solid fa-wand-sparkles"></i> Shimmer rising</span>
+            </div>
             <div class="menu-options">
-                <button id="btn-new-game" class="menu-btn"><i class="fa-solid fa-play"></i> New Game</button>
-                <button id="btn-load-game" class="menu-btn"><i class="fa-solid fa-upload"></i> Load Game</button>
+                <button id="btn-new-game" class="menu-btn" type="button"><i class="fa-solid fa-compass"></i> Begin Expedition</button>
+                <button id="btn-load-game" class="menu-btn menu-btn-secondary" type="button"><i class="fa-solid fa-box-archive"></i> Restore Field Record</button>
             </div>
         </div>
     </div>
@@ -60,7 +68,7 @@
             <div class="vn-speaker" id="vn-speaker">???</div>
             <div class="vn-text" id="vn-text">...</div>
             <div class="vn-controls">
-                <button id="vn-next" class="vn-next-btn">Next <i class="fa-solid fa-caret-right"></i></button>
+                <button id="vn-next" class="vn-next-btn" type="button">Continue <i class="fa-solid fa-caret-right"></i></button>
             </div>
         </div>
 
@@ -79,8 +87,12 @@
                 <!-- Builds injected here via JS -->
             </div>
 
+            <div id="build-description" class="build-description-box" style="display: none;">
+                <!-- Target for build description JS -->
+            </div>
+
             <div class="text-center mt-4">
-                <button id="btn-start-adventure" class="menu-btn" disabled>Begin Journey</button>
+                <button id="btn-start-adventure" class="menu-btn" type="button" disabled>Seal the Record</button>
             </div>
         </div>
     </div>
@@ -96,14 +108,14 @@
             <!-- Player Header -->
             <div class="player-header">
                 <div class="player-avatar">
-                    <i class="fa-solid fa-helmet-safety"></i>
+                    <img id="player-avatar-image" src="img/avatar_survivor.png" alt="Selected survivor portrait">
                 </div>
-                <div class="player-name">The Scrapper</div>
-                <div class="player-title">Wastes Survivor</div>
+                <div class="player-name" id="player-name">The Scrapper</div>
+                <div class="player-title" id="player-title">survivor · wastes survivor</div>
             </div>
 
             <!-- Vitals Section (HP / MP / EXP) -->
-            <div class="hud-section">
+            <div class="hud-section hud-vitals">
                 <div class="hud-section-title">Vitals</div>
 
                 <!-- HP Bar -->
@@ -112,7 +124,7 @@
                         <span class="resource-label-name"><i class="fa-solid fa-heart"></i> HP</span>
                         <span class="resource-label-value" id="hp-value">50/50</span>
                     </div>
-                    <div class="resource-bar">
+                    <div class="resource-bar" role="progressbar" aria-label="Health" aria-valuemin="0" aria-valuenow="50" aria-valuemax="50">
                         <div class="resource-bar-fill" id="hp-fill" style="width: 100%"></div>
                     </div>
                 </div>
@@ -123,7 +135,7 @@
                         <span class="resource-label-name"><i class="fa-solid fa-droplet"></i> MP</span>
                         <span class="resource-label-value" id="mp-value">30/30</span>
                     </div>
-                    <div class="resource-bar">
+                    <div class="resource-bar" role="progressbar" aria-label="Mana" aria-valuemin="0" aria-valuenow="30" aria-valuemax="30">
                         <div class="resource-bar-fill" id="mp-fill" style="width: 100%"></div>
                     </div>
                 </div>
@@ -134,7 +146,7 @@
                         <span class="resource-label-name"><i class="fa-solid fa-star"></i> EXP</span>
                         <span class="resource-label-value" id="exp-value">0/100</span>
                     </div>
-                    <div class="resource-bar">
+                    <div class="resource-bar" role="progressbar" aria-label="Experience" aria-valuemin="0" aria-valuenow="0" aria-valuemax="100">
                         <div class="resource-bar-fill" id="exp-fill" style="width: 0%"></div>
                     </div>
                 </div>
@@ -145,7 +157,7 @@
             </div>
 
             <!-- Attributes Section -->
-            <div class="hud-section">
+            <div class="hud-section hud-attributes">
                 <div class="hud-section-title">Attributes</div>
                 <div class="stats-grid">
                     <div class="stat-item">
@@ -180,7 +192,7 @@
             </div>
 
             <!-- Status Section (Coins, Day) -->
-            <div class="hud-section">
+            <div class="hud-section hud-status">
                 <div class="hud-section-title">Status</div>
                 <div class="info-row">
                     <div class="info-row-label">
@@ -197,7 +209,7 @@
             </div>
 
             <!-- Time of Day -->
-            <div class="hud-section">
+            <div class="hud-section hud-time">
                 <div class="hud-section-title">Time of Day</div>
                 <div class="time-cycle">
                     <div class="time-phase active" data-phase="0">
@@ -220,7 +232,7 @@
             </div>
 
             <!-- Menu Buttons -->
-            <div class="hud-section">
+            <div class="hud-section hud-menu">
                 <div class="hud-section-title">Menu</div>
                 <button class="hud-btn" id="btn-stats">
                     <i class="fa-solid fa-chart-bar"></i> Stats <span class="kbd-hint">S</span>
@@ -258,8 +270,7 @@
                     </div>
                 </div>
                 <div class="banner-actions">
-                    <button class="banner-btn" title="Party"><i class="fa-solid fa-user-group"></i></button>
-                    <button class="banner-btn" title="Menu"><i class="fa-solid fa-bars"></i></button>
+                    <span class="field-signal"><i class="fa-solid fa-signal"></i> LINKED</span>
                 </div>
             </div>
 
@@ -285,7 +296,7 @@
             </div>
 
             <!-- Narrative Container (Chat History) -->
-            <div class="narrative-container" id="narrative-container">
+            <div class="narrative-container" id="narrative-container" tabindex="0" role="log" aria-live="polite" aria-label="Expedition log">
                 <!-- Narrative messages rendered here by JS -->
             </div>
 
@@ -303,13 +314,19 @@
                     <!-- Items rendered by JS -->
                 </div>
 
+                <!-- Ability Hotbar (visible during combat) -->
+                <div class="ability-hotbar" id="ability-hotbar">
+                    <!-- Skills rendered by JS -->
+                </div>
+
                 <div class="choices-container" id="choices-container">
                     <!-- Choice buttons rendered here by JS -->
                 </div>
                 <div class="input-container">
+                    <label class="visually-hidden" for="custom-input">Describe a custom action</label>
                     <input type="text" class="custom-input" id="custom-input"
                         placeholder="Type a custom action or press / to focus... (e.g. 'explore', 'attack')">
-                    <button class="send-btn" id="send-btn">
+                    <button class="send-btn" id="send-btn" type="button">
                         <i class="fa-solid fa-paper-plane"></i> Send
                     </button>
                 </div>
@@ -336,84 +353,127 @@
             <div class="modal-content">
                 <div class="modal-header">
                     <h5 class="modal-title"><i class="fa-solid fa-chart-bar"></i> Character Stats</h5>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close character stats"></button>
                 </div>
-                <div class="modal-body">
-                    <!-- Stat Points -->
-                    <div class="stat-points-header">
+                <div class="modal-body dual-col-body">
+                    <div class="stat-points-header w-100">
                         <div class="stat-points-label">Available Stat Points</div>
                         <div class="stat-points-value" id="modal-stat-points">0</div>
                     </div>
 
-                    <!-- STR -->
-                    <div class="stat-upgrade-row">
-                        <div class="stat-upgrade-left">
-                            <div class="stat-upgrade-icon"
-                                style="background: rgba(255, 107, 53, 0.18); color: var(--ember);">
-                                <i class="fa-solid fa-fist-raised"></i>
-                            </div>
-                            <div class="stat-upgrade-info">
-                                <div class="stat-upgrade-name">Strength</div>
-                                <div class="stat-upgrade-desc">Increases physical damage and max HP</div>
-                            </div>
-                        </div>
-                        <div class="stat-upgrade-right">
-                            <span class="stat-upgrade-value" id="modal-str">5</span>
-                            <button class="stat-upgrade-btn" data-stat="str" disabled>+</button>
-                        </div>
-                    </div>
+                    <div class="stats-columns">
+                        <!-- Left Column: Base Attributes -->
+                        <div class="stats-col-left">
+                            <h6 class="col-title text-muted mb-3"><i class="fa-solid fa-dna"></i> Base Attributes</h6>
 
-                    <!-- DEF -->
-                    <div class="stat-upgrade-row">
-                        <div class="stat-upgrade-left">
-                            <div class="stat-upgrade-icon"
-                                style="background: rgba(0, 180, 216, 0.18); color: var(--mana-blue);">
-                                <i class="fa-solid fa-shield-halved"></i>
+                            <!-- STR -->
+                            <div class="stat-upgrade-row">
+                                <div class="stat-upgrade-left">
+                                    <div class="stat-upgrade-icon"
+                                        style="background: rgba(255, 107, 53, 0.18); color: var(--ember);">
+                                        <i class="fa-solid fa-fist-raised"></i>
+                                    </div>
+                                    <div class="stat-upgrade-info">
+                                        <div class="stat-upgrade-name">Strength</div>
+                                    </div>
+                                </div>
+                                <div class="stat-upgrade-right">
+                                    <span class="stat-upgrade-value" id="modal-str">5</span>
+                                    <button class="stat-upgrade-btn" data-stat="str" disabled>+</button>
+                                </div>
                             </div>
-                            <div class="stat-upgrade-info">
-                                <div class="stat-upgrade-name">Defense</div>
-                                <div class="stat-upgrade-desc">Reduces incoming damage taken</div>
-                            </div>
-                        </div>
-                        <div class="stat-upgrade-right">
-                            <span class="stat-upgrade-value" id="modal-def">3</span>
-                            <button class="stat-upgrade-btn" data-stat="def" disabled>+</button>
-                        </div>
-                    </div>
 
-                    <!-- INT -->
-                    <div class="stat-upgrade-row">
-                        <div class="stat-upgrade-left">
-                            <div class="stat-upgrade-icon"
-                                style="background: rgba(139, 92, 246, 0.18); color: var(--purple-accent);">
-                                <i class="fa-solid fa-book-open"></i>
+                            <!-- DEF -->
+                            <div class="stat-upgrade-row">
+                                <div class="stat-upgrade-left">
+                                    <div class="stat-upgrade-icon"
+                                        style="background: rgba(0, 180, 216, 0.18); color: var(--mana-blue);">
+                                        <i class="fa-solid fa-shield-halved"></i>
+                                    </div>
+                                    <div class="stat-upgrade-info">
+                                        <div class="stat-upgrade-name">Defense</div>
+                                    </div>
+                                </div>
+                                <div class="stat-upgrade-right">
+                                    <span class="stat-upgrade-value" id="modal-def">3</span>
+                                    <button class="stat-upgrade-btn" data-stat="def" disabled>+</button>
+                                </div>
                             </div>
-                            <div class="stat-upgrade-info">
-                                <div class="stat-upgrade-name">Intelligence</div>
-                                <div class="stat-upgrade-desc">Boosts magic damage and max MP</div>
-                            </div>
-                        </div>
-                        <div class="stat-upgrade-right">
-                            <span class="stat-upgrade-value" id="modal-int">4</span>
-                            <button class="stat-upgrade-btn" data-stat="int" disabled>+</button>
-                        </div>
-                    </div>
 
-                    <!-- AGI -->
-                    <div class="stat-upgrade-row">
-                        <div class="stat-upgrade-left">
-                            <div class="stat-upgrade-icon"
-                                style="background: rgba(0, 245, 212, 0.18); color: var(--teal);">
-                                <i class="fa-solid fa-bolt"></i>
+                            <!-- INT -->
+                            <div class="stat-upgrade-row">
+                                <div class="stat-upgrade-left">
+                                    <div class="stat-upgrade-icon"
+                                        style="background: rgba(139, 92, 246, 0.18); color: var(--purple-accent);">
+                                        <i class="fa-solid fa-book-open"></i>
+                                    </div>
+                                    <div class="stat-upgrade-info">
+                                        <div class="stat-upgrade-name">Intelligence</div>
+                                    </div>
+                                </div>
+                                <div class="stat-upgrade-right">
+                                    <span class="stat-upgrade-value" id="modal-int">4</span>
+                                    <button class="stat-upgrade-btn" data-stat="int" disabled>+</button>
+                                </div>
                             </div>
-                            <div class="stat-upgrade-info">
-                                <div class="stat-upgrade-name">Agility</div>
-                                <div class="stat-upgrade-desc">Improves dodge chance and flee success</div>
+
+                            <!-- AGI -->
+                            <div class="stat-upgrade-row">
+                                <div class="stat-upgrade-left">
+                                    <div class="stat-upgrade-icon"
+                                        style="background: rgba(0, 245, 212, 0.18); color: var(--teal);">
+                                        <i class="fa-solid fa-bolt"></i>
+                                    </div>
+                                    <div class="stat-upgrade-info">
+                                        <div class="stat-upgrade-name">Agility</div>
+                                    </div>
+                                </div>
+                                <div class="stat-upgrade-right">
+                                    <span class="stat-upgrade-value" id="modal-agi">4</span>
+                                    <button class="stat-upgrade-btn" data-stat="agi" disabled>+</button>
+                                </div>
                             </div>
                         </div>
-                        <div class="stat-upgrade-right">
-                            <span class="stat-upgrade-value" id="modal-agi">4</span>
-                            <button class="stat-upgrade-btn" data-stat="agi" disabled>+</button>
+
+                        <!-- Right Column: Derived Stats -->
+                        <div class="stats-col-right">
+                            <h6 class="col-title text-muted mb-3"><i class="fa-solid fa-chart-line"></i> Combat
+                                Statistics</h6>
+
+                            <div class="derived-stat-box">
+                                <div class="derived-label"><i class="fa-solid fa-heart-pulse text-danger"></i> Maximum
+                                    HP</div>
+                                <div class="derived-val" id="derived-hp">50</div>
+                            </div>
+                            <div class="derived-stat-box">
+                                <div class="derived-label"><i class="fa-solid fa-droplet text-info"></i> Maximum MP
+                                </div>
+                                <div class="derived-val" id="derived-mp">30</div>
+                            </div>
+                            <div class="derived-stat-box">
+                                <div class="derived-label"><i class="fa-solid fa-hammer text-warning"></i> Physical
+                                    Attack</div>
+                                <div class="derived-val" id="derived-atk">10 - 15</div>
+                            </div>
+                            <div class="derived-stat-box">
+                                <div class="derived-label"><i class="fa-solid fa-shield text-primary"></i> Damage
+                                    Reduction</div>
+                                <div class="derived-val" id="derived-dr">5%</div>
+                            </div>
+                            <div class="derived-stat-box">
+                                <div class="derived-label"><i class="fa-solid fa-wand-sparkles text-purple"></i> Magic
+                                    Attack</div>
+                                <div class="derived-val" id="derived-matk">8 - 12</div>
+                            </div>
+                            <div class="derived-stat-box">
+                                <div class="derived-label"><i class="fa-solid fa-crosshairs text-success"></i> Critical
+                                    Hit</div>
+                                <div class="derived-val" id="derived-crit">5%</div>
+                            </div>
+                            <div class="derived-stat-box">
+                                <div class="derived-label"><i class="fa-solid fa-wind text-teal"></i> Evasion</div>
+                                <div class="derived-val" id="derived-evade">4%</div>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -434,27 +494,14 @@
             <div class="modal-content">
                 <div class="modal-header">
                     <h5 class="modal-title"><i class="fa-solid fa-briefcase"></i> Inventory</h5>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close inventory"></button>
                 </div>
                 <div class="modal-body">
                     <!-- Equipment -->
                     <div class="equipment-section">
                         <div class="equipment-title">Equipped Gear</div>
-                        <div class="equipment-slots">
-                            <div class="equip-slot">
-                                <i class="fa-solid fa-hammer" id="equipped-weapon-icon" style="color: var(--ember)"></i>
-                                <div class="equip-slot-info">
-                                    <span class="equip-slot-type">Weapon</span>
-                                    <span class="equip-slot-name" id="equipped-weapon-name">Rusted Pipe</span>
-                                </div>
-                            </div>
-                            <div class="equip-slot">
-                                <i class="fa-solid fa-shirt" id="equipped-armor-icon" style="color: #6c757d"></i>
-                                <div class="equip-slot-info">
-                                    <span class="equip-slot-type">Armor</span>
-                                    <span class="equip-slot-name" id="equipped-armor-name">Padded Clothing</span>
-                                </div>
-                            </div>
+                        <div class="paper-doll-layout" id="paper-doll-grid">
+                            <!-- Slots rendered by JS: Head, Chest, Main Hand, Off Hand, Accessory -->
                         </div>
                     </div>
 
@@ -481,7 +528,7 @@
             <div class="modal-content">
                 <div class="modal-header">
                     <h5 class="modal-title"><i class="fa-solid fa-floppy-disk"></i> Save / Load Game</h5>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close save records"></button>
                 </div>
                 <div class="modal-body">
                     <div id="save-slots-container">
@@ -497,11 +544,85 @@
         </div>
     </div>
 
+    <!-- ========== FIELD MAP ========== -->
+    <div class="modal fade game-modal" id="mapModal" tabindex="-1" aria-labelledby="map-modal-title">
+        <div class="modal-dialog modal-dialog-centered modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="map-modal-title"><i class="fa-solid fa-map-location-dot"></i> Field Map</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close field map"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="field-map" aria-label="Known regions">
+                        <article class="map-region map-region-bastion" data-map-region="last_bastion">
+                            <span class="map-marker"><i class="fa-solid fa-tower-observation"></i></span>
+                            <div><strong>The Last Bastion</strong><small>Safe zone · traders · shelter</small></div>
+                        </article>
+                        <div class="map-route" aria-hidden="true"><span></span><span></span><span></span></div>
+                        <article class="map-region map-region-ash" data-map-region="ash_plains">
+                            <span class="map-marker"><i class="fa-solid fa-wind"></i></span>
+                            <div><strong>The Ash Plains</strong><small>Lv. 1–3 · hostile frontier</small></div>
+                        </article>
+                        <article class="map-region map-region-unknown">
+                            <span class="map-marker"><i class="fa-solid fa-lock"></i></span>
+                            <div><strong>Signal obscured</strong><small>Uncharted territory</small></div>
+                        </article>
+                    </div>
+                    <p class="map-note"><i class="fa-solid fa-circle-info"></i> The map records known routes only. Travel through the expedition choices.</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ========== ACCESSIBILITY & NARRATIVE SETTINGS ========== -->
+    <div class="modal fade game-modal" id="settingsModal" tabindex="-1" aria-labelledby="settings-modal-title">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="settings-modal-title"><i class="fa-solid fa-sliders"></i> Field Rig Settings</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close settings"></button>
+                </div>
+                <div class="modal-body settings-list">
+                    <label class="setting-row" for="setting-text-speed">
+                        <span><strong>Narrative text</strong><small>Control the typewriter pace.</small></span>
+                        <select id="setting-text-speed" class="setting-select">
+                            <option value="0">Instant</option>
+                            <option value="8">Fast</option>
+                            <option value="18">Standard</option>
+                            <option value="32">Deliberate</option>
+                        </select>
+                    </label>
+                    <label class="setting-row" for="setting-text-size">
+                        <span><strong>Text size</strong><small>Adjust expedition-log readability.</small></span>
+                        <select id="setting-text-size" class="setting-select">
+                            <option value="compact">Compact</option>
+                            <option value="standard">Standard</option>
+                            <option value="large">Large</option>
+                        </select>
+                    </label>
+                    <label class="setting-row" for="setting-music-enabled">
+                        <span><strong>Ambient music</strong><small>Remember music preference on this device.</small></span>
+                        <input id="setting-music-enabled" class="setting-check" type="checkbox">
+                    </label>
+                    <label class="setting-row" for="setting-reduced-motion">
+                        <span><strong>Reduce motion</strong><small>Disable shakes, particles, and animated transitions.</small></span>
+                        <input id="setting-reduced-motion" class="setting-check" type="checkbox">
+                    </label>
+                    <div class="shortcut-ledger">
+                        <strong>Keyboard ledger</strong>
+                        <span><kbd>1–4</kbd> choices</span><span><kbd>S</kbd> stats</span><span><kbd>I</kbd> inventory</span><span><kbd>F</kbd> records</span><span><kbd>/</kbd> custom action</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <!-- ========== SCRIPTS ========== -->
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
-    <script src="js/data.js"></script>
-    <script src="js/game.js"></script>
-    <script src="js/ui.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/dompurify@3.2.6/dist/purify.min.js"></script>
+    <script src="js/data.js?v=20260712d"></script>
+    <script src="js/game.js?v=20260712d"></script>
+    <script src="js/ui.js?v=20260712d"></script>
 </body>
 
 </html>

@@ -1440,7 +1440,125 @@ body::before {
     text-shadow: 0 0 15px var(--gold-glow);
 }
 
-/* ---- Inventory Modal ---- */
+/* ---- Stats Modal Dual Column ---- */
+.stats-columns {
+    display: flex;
+    gap: 30px;
+    align-items: stretch;
+}
+
+.stats-col-left,
+.stats-col-right {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 15px;
+}
+
+.derived-stat-box {
+    background: rgba(0, 0, 0, 0.4);
+    border: 1px solid var(--border-subtle);
+    border-radius: 8px;
+    padding: 12px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.derived-label {
+    font-size: 0.85rem;
+    color: var(--text-muted);
+    font-family: var(--font-ui);
+    text-transform: uppercase;
+    letter-spacing: 1px;
+}
+
+.derived-val {
+    font-size: 1.1rem;
+    font-family: var(--font-mono);
+    color: var(--text-bright);
+    font-weight: bold;
+}
+
+/* ---- Paper Doll Layout ---- */
+.paper-doll-layout {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    grid-template-areas:
+        ". hd ."
+        "mh ch oh"
+        ". ac .";
+    gap: 15px;
+    justify-content: center;
+    align-items: center;
+    margin-bottom: 20px;
+    padding: 20px;
+    background: rgba(0, 0, 0, 0.2);
+    border-radius: 12px;
+}
+
+.pd-slot {
+    aspect-ratio: 1;
+    background: var(--bg-card);
+    border: 2px dashed rgba(255, 255, 255, 0.1);
+    border-radius: 10px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 5px;
+    cursor: pointer;
+    transition: all var(--transition-fast);
+    position: relative;
+    user-select: none;
+}
+
+.pd-slot:hover {
+    border-color: var(--teal);
+}
+
+.pd-slot[data-slot="head"] {
+    grid-area: hd;
+}
+
+.pd-slot[data-slot="chest"] {
+    grid-area: ch;
+}
+
+.pd-slot[data-slot="main_hand"] {
+    grid-area: mh;
+}
+
+.pd-slot[data-slot="off_hand"] {
+    grid-area: oh;
+}
+
+.pd-slot[data-slot="accessory"] {
+    grid-area: ac;
+}
+
+.pd-slot.filled {
+    border-style: solid;
+    border-color: var(--border-subtle);
+}
+
+.pd-slot i {
+    font-size: 1.5rem;
+    opacity: 0.5;
+}
+
+.pd-slot.filled i {
+    opacity: 1;
+    font-size: 2rem;
+}
+
+.pd-slot-name {
+    font-size: 0.7rem;
+    color: var(--text-muted);
+    text-align: center;
+}
+
+/* ---- Inventory Modal Grid ---- */
 .inventory-grid {
     display: grid;
     grid-template-columns: repeat(4, 1fr);
@@ -2545,9 +2663,10 @@ body::before {
     font-size: 4rem;
     font-weight: 900;
     color: #fff;
-    text-shadow: 0 0 20px var(--teal), 0 0 40px rgba(0, 245, 212, 0.5);
+    text-shadow: 0 0 20px var(--teal), 0 0 40px rgba(0, 245, 212, 0.5), 0 5px 15px rgba(0, 0, 0, 0.8);
     margin-bottom: 0.5rem;
     letter-spacing: 4px;
+    transform: translateY(-8vh);
 }
 
 .game-subtitle {
@@ -2557,6 +2676,8 @@ body::before {
     letter-spacing: 6px;
     text-transform: uppercase;
     margin-bottom: 3rem;
+    text-shadow: 0 2px 5px rgba(0, 0, 0, 0.8);
+    transform: translateY(-8vh);
 }
 
 .menu-options {
@@ -2758,6 +2879,20 @@ body::before {
     font-family: var(--font-mono);
     font-size: 0.75rem;
     color: var(--teal);
+}
+
+.build-desc-box {
+    background: rgba(13, 17, 23, 0.6);
+    border-left: 3px solid var(--teal);
+    padding: 15px;
+    font-family: var(--font-body);
+    font-size: 0.95rem;
+    color: var(--text-light);
+    text-align: left;
+    min-height: 60px;
+    border-radius: 0 8px 8px 0;
+    max-width: 600px;
+    margin: 15px auto 0;
 }
 
 /* ---- Slash VFX ---- */
