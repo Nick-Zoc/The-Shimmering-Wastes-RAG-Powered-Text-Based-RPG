@@ -56,5 +56,9 @@ assert.match(design, /\.game-title\s*\{[\s\S]*?transform: none;/);
 assert.match(design, /\.game-subtitle\s*\{[\s\S]*?transform: none;/);
 assert.match(design, /\.level-up-text\s*\{[\s\S]*?text-shadow: none;/);
 assert.match(design, /\.notification-badge\s*\{[\s\S]*?box-shadow: none;/);
+assert.match(design, /\.ability-hotbar\s*\{[\s\S]*?display: none;/, "inactive combat hotbar must stay hidden");
+assert.match(design, /\.ability-hotbar\.active\s*\{[\s\S]*?display: grid;/, "active combat hotbar must use the action grid");
+assert.match(design, /#inventoryModal \.paper-doll-layout\s*\{[\s\S]*?grid-template-columns: repeat\(5,/,
+    "desktop inventory must keep the loadout compact enough to expose carried items");
 
 console.log("frontend-contract.test.mjs: all assertions passed");

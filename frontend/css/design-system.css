@@ -811,6 +811,17 @@ kbd {
     border-radius: 0;
 }
 
+.ability-hotbar {
+    display: none;
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+    gap: 7px;
+    margin-top: 8px;
+}
+
+.ability-hotbar.active {
+    display: grid;
+}
+
 .quick-use-label,
 .turn-indicator {
     font-family: var(--font-mono);
@@ -825,6 +836,38 @@ kbd {
     background: #111619;
     color: var(--rig-paper);
     box-shadow: none;
+}
+
+.hotbar-btn {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 7px;
+    min-width: 0;
+    min-height: 48px;
+    padding: 8px 10px;
+    font-family: var(--font-mono);
+    text-align: left;
+}
+
+.hotbar-btn > i {
+    color: var(--shimmer);
+}
+
+.hotbar-btn-name {
+    min-width: 0;
+    overflow: hidden;
+    color: var(--rig-paper);
+    font-size: .68rem;
+    font-weight: 700;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.hotbar-btn-mp {
+    color: var(--mana-blue);
+    font-size: .58rem;
+    white-space: nowrap;
 }
 
 .quick-use-item:hover,
@@ -931,6 +974,26 @@ button.inventory-slot {
 .pd-slot:focus-visible,
 .inventory-slot:focus-visible {
     border-color: var(--shimmer);
+}
+
+/* A compact loadout ledger keeps carried items visible without scrolling past
+   an oversized decorative paper doll. */
+#inventoryModal .paper-doll-layout {
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+    grid-template-areas: "hd ch mh oh ac";
+    gap: 9px;
+    margin-bottom: 16px;
+    padding: 12px;
+}
+
+#inventoryModal .pd-slot {
+    min-height: 108px;
+    aspect-ratio: auto;
+    padding: 10px 7px;
+}
+
+#inventoryModal .inventory-grid {
+    grid-template-columns: repeat(5, minmax(0, 1fr));
 }
 
 .save-slot-number,
@@ -1258,6 +1321,10 @@ button.inventory-slot {
     .narrative-message {
         grid-template-columns: 118px minmax(0, 1fr);
     }
+
+    .ability-hotbar {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
 }
 
 /* Keep every desktop instrument reachable on common laptop-height screens. */
@@ -1533,6 +1600,21 @@ button.inventory-slot {
         overflow-x: auto;
     }
 
+    #inventoryModal .paper-doll-layout {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        grid-template-areas:
+            "hd ch mh"
+            "oh ac .";
+    }
+
+    #inventoryModal .pd-slot {
+        min-height: 76px;
+    }
+
+    #inventoryModal .inventory-grid {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
+
     .menu-content {
         left: 18px;
         width: calc(100vw - 36px);
@@ -1628,6 +1710,18 @@ button.inventory-slot {
     .save-slot-actions {
         margin-top: 10px;
         justify-content: flex-end;
+    }
+
+    #inventoryModal .paper-doll-layout,
+    #inventoryModal .inventory-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    #inventoryModal .paper-doll-layout {
+        grid-template-areas:
+            "hd ch"
+            "mh oh"
+            "ac .";
     }
 }
 

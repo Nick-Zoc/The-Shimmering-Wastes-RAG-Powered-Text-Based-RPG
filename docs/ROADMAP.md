@@ -34,10 +34,10 @@ Goal: finish a distinctive, correct, responsive, and testable vanilla frontend b
 
 See [Frontend Plan](FRONTEND_PLAN.md), F0-F1.
 
-- [ ] Resolve or remove the dual-combat, ability, VFX, load, autosave, derived-stat, affix, reward, travel, economy, and injection regressions.
+- [x] Resolve or remove the dual-combat, ability, VFX, load, autosave, derived-stat, affix, reward, travel, economy, and injection regressions.
 - [ ] Replace duplicate exploratory browser scripts with assertions.
 - [ ] Capture reference flows and responsive screenshots.
-- [ ] Implement the Bastion Field Rig design system across all core components.
+- [x] Implement the Bastion Field Rig design system across all core components.
 - [ ] Refactor the existing HTML/CSS/vanilla JS only where responsibilities become clearer and testable.
 - [ ] Complete settings, map, save management, responsive layouts, accessibility, and player-identity polish.
 - [ ] Add canonical lint, type-check, unit, and browser commands.
@@ -48,7 +48,7 @@ Exit gate: the complete local prototype loop is visually coherent, responsive, a
 Notes:
 
 - The first correctness/design/QOL implementation is present in the working tree and the deterministic engine assertions pass.
-- A 1280x720 live-browser pass reached onboarding, character creation, the main game shell, and Stats; it found title, sidebar-height, and modal-height defects that were repaired in the working tree.
+- Live Chrome passes now cover onboarding, the core game shell, all primary ledgers, merchant purchase, travel, combat/rewards/loot, save/restore, and 390px/768px responsive layouts; the observed inventory and combat-deck defects were repaired.
 - Static frontend contract assertions now complement the engine test, but they are not accepted as browser or accessibility evidence.
 - Phase 1 remains open until responsive visual checks, keyboard/touch playtesting, legacy CSS cleanup, and canonical browser assertions provide the acceptance evidence.
 

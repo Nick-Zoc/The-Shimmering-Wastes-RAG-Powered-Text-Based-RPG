@@ -150,10 +150,10 @@ Exit gate: frontend critical tests pass, manual checks are recorded, no visible 
 
 Validation note, 2026-07-12:
 
-- The live 1280x720 pass reached menu, intro, character creation, the running HUD/log/action shell, and Stats.
-- The menu title overlap is browser-verified as repaired. Compact laptop-height sidebar and bounded-modal fixes were implemented from measured overflow evidence but still require a second rendered pass.
-- A Brave `file://` review confirmed zero-setup loading and exposed a second legacy transform on the subtitle; the transform and remaining reward/notification glow were removed in the design-system override.
-- The local preview became unavailable before inventory, map, settings, save, merchant, combat, responsive breakpoints, keyboard, and touch could be completed. None of those boxes are accepted on the strength of static inspection alone.
+- Live Chrome QA reached menu, intro, character creation, HUD/log/actions, Stats, Inventory, Save/Load, Map, Settings, merchant purchase, travel, two encounters, rewards/loot, autosave, and restore.
+- The inventory loadout was compacted after its oversized paper doll hid carried items; the action hotbar was rebuilt as a responsive command grid and now hides outside combat.
+- Desktop and `390x844` mobile renders passed without horizontal overflow. The first `768x900` render exposed truncated five-column labels, so tablet changed to three columns; browser safety stopped the reload before that final refinement could be rendered again.
+- Settings persistence was verified with instant narration and reduced motion. Remaining manual scope is healer, keyboard/touch, flee, death, corrupt/delete save flows, exact target-width snapshots, and accessibility/contrast automation.
 
 ## Backend handoff after frontend freeze
 
